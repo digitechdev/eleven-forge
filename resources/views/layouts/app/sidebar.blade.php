@@ -11,35 +11,87 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Platform')" class="grid">
+                <flux:sidebar.group :heading="__('Overview')" class="grid">
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
+                @if (auth()->user()->can('viewAny', App\Models\Innovation::class) || auth()->user()->can('viewAny', App\Models\InnovationCategory::class))
+                    <flux:sidebar.group :heading="__('Innovations')" class="grid">
+                        @can('viewAny', App\Models\Innovation::class)
+                            <flux:sidebar.item icon="light-bulb" :href="route('innovations.index')" :current="request()->routeIs('innovations.*')" wire:navigate>
+                                {{ __('Innovations') }}
+                            </flux:sidebar.item>
+                        @endcan
+                        @can('viewAny', App\Models\InnovationCategory::class)
+                            <flux:sidebar.item icon="tag" :href="route('innovation-categories.index')" :current="request()->routeIs('innovation-categories.*')" wire:navigate>
+                                {{ __('Innovation categories') }}
+                            </flux:sidebar.item>
+                        @endcan
+                    </flux:sidebar.group>
+                @endif
+                @can('viewAny', App\Models\Technology::class)
+                    <flux:sidebar.group :heading="__('Technologies')" class="grid">
+                        <flux:sidebar.item icon="code-bracket-square" :href="route('technologies.index')" :current="request()->routeIs('technologies.*')" wire:navigate>
+                            {{ __('Technologies') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
+                @can('viewAny', App\Models\InventoryItem::class)
+                    <flux:sidebar.group :heading="__('Inventory')" class="grid">
+                        <flux:sidebar.item icon="cube" :href="route('inventory.items.index')" :current="request()->routeIs('inventory.items.*')" wire:navigate>
+                            {{ __('Items') }}
+                        </flux:sidebar.item>
+                        @can('viewAny', App\Models\ItemCategory::class)
+                            <flux:sidebar.item icon="rectangle-stack" :href="route('inventory.categories.index')" :current="request()->routeIs('inventory.categories.*')" wire:navigate>
+                                {{ __('Item categories') }}
+                            </flux:sidebar.item>
+                        @endcan
+                        @can('viewAny', App\Models\Unit::class)
+                            <flux:sidebar.item icon="scale" :href="route('inventory.units.index')" :current="request()->routeIs('inventory.units.*')" wire:navigate>
+                                {{ __('Units') }}
+                            </flux:sidebar.item>
+                        @endcan
+                    </flux:sidebar.group>
+                @endcan
+                @if (auth()->user()->can('viewAny', App\Models\User::class) || auth()->user()->can(App\AccessPermission::RoleManage->value))
+                    <flux:sidebar.group :heading="__('Administration')" class="grid">
+                        @can('viewAny', App\Models\User::class)
+                            <flux:sidebar.item icon="user-group" :href="route('administration.users.index')" :current="request()->routeIs('administration.users.*')" wire:navigate>
+                                {{ __('Users') }}
+                            </flux:sidebar.item>
+                        @endcan
+                        @can(App\AccessPermission::RoleManage->value)
+                            <flux:sidebar.item icon="identification" :href="route('administration.roles.index')" :current="request()->routeIs('administration.roles.*')" wire:navigate>
+                                {{ __('Roles') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="key" :href="route('administration.permissions.index')" :current="request()->routeIs('administration.permissions.*')" wire:navigate>
+                                {{ __('Permissions') }}
+                            </flux:sidebar.item>
+                        @endcan
+                    </flux:sidebar.group>
+                @endif
             </flux:sidebar.nav>
 
             <flux:spacer />
-
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
-
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
 
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>
 
-        <!-- Mobile User Menu -->
-        <flux:header class="lg:hidden">
+        <flux:header class="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
             <flux:spacer />
 
-            <flux:dropdown position="top" align="end">
+            <flux:navbar>
+                <flux:navbar.item icon="globe-alt" :href="route('showcase.index')" :current="request()->routeIs('showcase.*')" wire:navigate>
+                    {{ __('Showcase') }}
+                </flux:navbar.item>
+            </flux:navbar>
+
+            <x-notification-bell />
+
+            <flux:dropdown position="top" align="end" class="lg:hidden">
                 <flux:profile
                     :initials="auth()->user()->initials()"
                     icon-trailing="chevron-down"

@@ -50,9 +50,19 @@
             </div>
         </form>
 
-        <div class="space-x-1 text-sm text-center rtl:space-x-reverse text-zinc-600 dark:text-zinc-400">
-            <span>{{ __('Don\'t have an account?') }}</span>
-            <flux:link :href="route('register')" wire:navigate>{{ __('Sign up') }}</flux:link>
-        </div>
+        @if (app()->environment(['local', 'testing']) && Route::has('demo.login'))
+            <div class="flex flex-col gap-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <flux:heading size="sm">{{ __('Demo accounts') }}</flux:heading>
+                <flux:text>{{ __('Choose a role to sign in locally.') }}</flux:text>
+                <div class="grid grid-cols-2 gap-2">
+                    @foreach (App\UserRole::cases() as $role)
+                        <form method="POST" action="{{ route('demo.login', $role->value) }}">
+                            @csrf
+                            <flux:button type="submit" class="w-full">{{ $role->label() }}</flux:button>
+                        </form>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 </x-layouts::auth>
