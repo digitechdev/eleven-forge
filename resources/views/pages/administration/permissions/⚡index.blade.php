@@ -77,6 +77,18 @@ new #[Layout('layouts.app'), Title('Permissions')] class extends Component
             <flux:text class="mt-3">{{ __('Use lowercase names such as reports.view. Super Admin receives new permissions automatically.') }}</flux:text>
         </flux:card>
 
+        <x-page-roadmap
+            :tasks="[
+                __('Connect new permission names to specific app actions and policies before granting them.'),
+                __('Show where each permission is used in the application.'),
+                __('Record changes to permission grants for review.'),
+            ]"
+            :related="[
+                ['label' => __('Roles'), 'description' => __('Roles collect permissions; changing a role affects its assigned users.'), 'href' => route('administration.roles.index')],
+                ['label' => __('Users'), 'description' => __('Users gain these abilities through their role assignments.'), 'href' => route('administration.users.index')],
+            ]"
+        />
+
         <div class="space-y-3">
             @foreach ($this->permissions as $permission)
                 <flux:card wire:key="permission-{{ $permission->id }}">

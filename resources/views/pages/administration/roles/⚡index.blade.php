@@ -143,6 +143,18 @@ new #[Layout('layouts.app'), Title('Roles')] class extends Component
             </form>
         </flux:card>
 
+        <x-page-roadmap
+            :tasks="[
+                __('Connect role assignment to the Users management page.'),
+                __('Show an effective-access summary before changing role grants.'),
+                __('Record who changed a role or its permissions.'),
+            ]"
+            :related="[
+                ['label' => __('Users'), 'description' => __('Users receive access through their assigned roles.'), 'href' => route('administration.users.index')],
+                ['label' => __('Permissions'), 'description' => __('A role groups the named permissions available to its users.'), 'href' => route('administration.permissions.index')],
+            ]"
+        />
+
         @if ($editingRoleId !== null)
             <flux:card>
                 <form wire:submit="savePermissions" class="space-y-5">
