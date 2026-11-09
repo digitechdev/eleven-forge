@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\TechnologyStatus;
+use App\Enums\TechnologyStatus;
 use Database\Factories\TechnologyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

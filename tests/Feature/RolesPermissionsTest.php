@@ -1,10 +1,10 @@
 <?php
 
-use App\AccessPermission;
+use App\Enums\AccessPermission;
+use App\Enums\UserRole;
 use App\Models\User;
-use App\UserRole;
 use Database\Seeders\RolePermissionSeeder;
-use Livewire\Livewire;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -20,18 +20,28 @@ test('only super admin can open role and permission management', function () {
     $admin = User::factory()->admin()->create();
 
     foreach ($routeNames as $routeName) {
-        $this->actingAs($admin)
-            ->get(route($routeName))
-            ->assertForbidden();
+        $this->actingAs($admin)->get(route($routeName))->assertForbidden();
     }
+
+    $this->actingAs($admin)->post(route('administration.permissions.store'), ['name' => 'reports.view'])->assertForbidden();
+    $this->actingAs($admin)->post(route('administration.roles.store'), ['name' => 'Reviewer'])->assertForbidden();
 
     $superAdmin = User::factory()->superAdmin()->create();
 
-    $this->actingAs($superAdmin)->get(route('administration.roles.index'))->assertOk()->assertSee('Roles');
-    $this->actingAs($superAdmin)->get(route('administration.permissions.index'))->assertOk()->assertSee('Permissions');
-    $this->actingAs($superAdmin)->get(route('dashboard'))
-        ->assertSee(route('administration.roles.index'))
-        ->assertSee(route('administration.permissions.index'));
+    $this->actingAs($superAdmin)->get(route('administration.roles.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('administration/roles/Index')
+            ->has('roles', 5)
+            ->where('permissions', fn ($permissions) => collect($permissions)->doesntContain('name', AccessPermission::RoleManage->value)),
+        );
+
+    $this->actingAs($superAdmin)->get(route('administration.permissions.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('administration/permissions/Index')
+            ->has('permissions', count(AccessPermission::cases())),
+        );
 });
 
 test('super admin can create a permission and grant it to a new role', function () {
@@ -39,25 +49,22 @@ test('super admin can create a permission and grant it to a new role', function 
     $superAdmin = User::factory()->superAdmin()->create();
     $this->actingAs($superAdmin);
 
-    Livewire::test('pages::administration.permissions.index')
-        ->set('permissionName', 'reports.view')
-        ->call('createPermission')
-        ->assertHasNoErrors();
+    $this->post(route('administration.permissions.store'), ['name' => 'reports.view'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('administration.permissions.index'));
 
     expect($superAdmin->fresh()->can('reports.view'))->toBeTrue();
 
-    $component = Livewire::test('pages::administration.roles.index')
-        ->set('roleName', 'Project Reviewer')
-        ->call('createRole')
-        ->assertHasNoErrors();
+    $this->post(route('administration.roles.store'), ['name' => 'Project Reviewer'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('administration.roles.index'));
 
     $role = Role::findByName('PROJECT_REVIEWER', 'web');
     $permission = Permission::findByName('reports.view', 'web');
 
-    $component->assertSet('editingRoleId', $role->id)
-        ->set('selectedPermissions', [$permission->id])
-        ->call('savePermissions')
-        ->assertHasNoErrors();
+    $this->put(route('administration.roles.update', $role), ['permissions' => [$permission->id]])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('administration.roles.index'));
 
     expect($role->fresh()->hasPermissionTo('reports.view'))->toBeTrue();
 });
@@ -68,17 +75,11 @@ test('role grants reject unknown permissions and reserve role management for sup
     $role = Role::findByName(UserRole::Viewer->value, 'web');
     $roleManage = Permission::findByName(AccessPermission::RoleManage->value, 'web');
 
-    Livewire::test('pages::administration.roles.index')
-        ->call('editRole', $role->id)
-        ->set('selectedPermissions', [999999])
-        ->call('savePermissions')
-        ->assertHasErrors(['selectedPermissions.0']);
+    $this->put(route('administration.roles.update', $role), ['permissions' => [999999]])
+        ->assertSessionHasErrors('permissions.0');
 
-    Livewire::test('pages::administration.roles.index')
-        ->call('editRole', $role->id)
-        ->set('selectedPermissions', [$roleManage->id])
-        ->call('savePermissions')
-        ->assertHasErrors(['selectedPermissions']);
+    $this->put(route('administration.roles.update', $role), ['permissions' => [$roleManage->id]])
+        ->assertSessionHasErrors('permissions');
 
     expect($role->fresh()->hasPermissionTo(AccessPermission::RoleManage->value))->toBeFalse();
 });
@@ -88,30 +89,22 @@ test('super admin role grants cannot be edited', function () {
     $this->actingAs(User::factory()->superAdmin()->create());
     $superAdminRole = Role::findByName(UserRole::SuperAdmin->value, 'web');
 
-    Livewire::test('pages::administration.roles.index')
-        ->call('editRole', $superAdminRole->id)
-        ->assertForbidden();
-
-    Livewire::test('pages::administration.roles.index')
-        ->set('editingRoleId', $superAdminRole->id)
-        ->set('selectedPermissions', [])
-        ->call('savePermissions')
+    $this->put(route('administration.roles.update', $superAdminRole), ['permissions' => []])
         ->assertForbidden();
 
     expect($superAdminRole->fresh()->hasPermissionTo(AccessPermission::RoleManage->value))->toBeTrue();
 });
 
-test('duplicate and invalid permission names are rejected', function () {
+test('duplicate and invalid role and permission names are rejected', function () {
     $this->seed(RolePermissionSeeder::class);
     $this->actingAs(User::factory()->superAdmin()->create());
 
-    Livewire::test('pages::administration.permissions.index')
-        ->set('permissionName', AccessPermission::CatalogView->value)
-        ->call('createPermission')
-        ->assertHasErrors(['permissionName']);
+    $this->post(route('administration.permissions.store'), ['name' => AccessPermission::CatalogView->value])
+        ->assertSessionHasErrors('name');
 
-    Livewire::test('pages::administration.permissions.index')
-        ->set('permissionName', 'Reports View')
-        ->call('createPermission')
-        ->assertHasErrors(['permissionName']);
+    $this->post(route('administration.permissions.store'), ['name' => 'Reports View'])
+        ->assertSessionHasErrors('name');
+
+    $this->post(route('administration.roles.store'), ['name' => 'viewer'])
+        ->assertSessionHasErrors('name');
 });

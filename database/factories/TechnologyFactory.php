@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\TechnologyStatus;
 use App\Models\Technology;
-use App\TechnologyStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

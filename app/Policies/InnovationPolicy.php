@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\AccessPermission;
+use App\Enums\AccessPermission;
 use App\Models\Innovation;
 use App\Models\User;
 

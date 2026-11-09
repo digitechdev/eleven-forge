@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\InventoryItemStatus;
-use App\InventoryItemType;
+use App\Enums\InventoryItemStatus;
+use App\Enums\InventoryItemType;
 use Database\Factories\InventoryItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\InventoryItemStatus;
-use App\InventoryItemType;
+use App\Enums\InventoryItemStatus;
+use App\Enums\InventoryItemType;
 use App\Models\InventoryItem;
 use App\Models\ItemCategory;
 use App\Models\Unit;

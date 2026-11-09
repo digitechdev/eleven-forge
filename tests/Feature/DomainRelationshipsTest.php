@@ -1,7 +1,7 @@
 <?php
 
-use App\InnovationType;
-use App\InnovationVisibility;
+use App\Enums\InnovationType;
+use App\Enums\InnovationVisibility;
 use App\Models\Innovation;
 use App\Models\InnovationItem;
 use App\Models\InnovationMedia;

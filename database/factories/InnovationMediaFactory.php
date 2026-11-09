@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\InnovationMediaType;
+use App\Enums\InnovationMediaType;
 use App\Models\Innovation;
 use App\Models\InnovationMedia;
 use Illuminate\Database\Eloquent\Factories\Factory;

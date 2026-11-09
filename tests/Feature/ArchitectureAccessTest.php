@@ -1,15 +1,18 @@
 <?php
 
-use App\AccessPermission;
+use App\Enums\AccessPermission;
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Models\Innovation;
 use App\Models\InventoryItem;
 use App\Models\User;
-use App\UserRole;
-use App\UserStatus;
 use Database\Seeders\RolePermissionSeeder;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('the public showcase placeholder is available to guests', function () {
-    $this->get(route('showcase.index'))->assertOk()->assertSee('Showcase');
+    $this->get(route('showcase.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('showcase/Index'));
 });
 
 test('internal placeholders require authentication', function () {
@@ -23,6 +26,12 @@ test('active viewers can open the internal architecture pages but not administra
     $this->actingAs($viewer)->get(route('innovations.index'))->assertOk();
     $this->actingAs($viewer)->get(route('inventory.items.index'))->assertOk();
     $this->actingAs($viewer)->get(route('administration.users.index'))->assertForbidden();
+    $this->actingAs($viewer)->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('auth.access.can.viewInnovations', true)
+            ->where('auth.access.can.manageUsers', false)
+            ->where('auth.access.can.manageRoles', false),
+        );
 });
 
 test('inactive users cannot open internal architecture pages', function () {
@@ -77,10 +86,14 @@ test('super admin can open every internal menu destination', function () {
     }
 
     $this->actingAs($superAdmin)->get(route('dashboard'))
-        ->assertSee('Innovation categories')
-        ->assertSee('Item categories')
-        ->assertSee('Units')
-        ->assertSee('Users')
-        ->assertSee('Roles')
-        ->assertSee('Permissions');
+        ->assertInertia(fn (Assert $page) => $page->where('auth.access.can', [
+            'viewInnovations' => true,
+            'viewInnovationCategories' => true,
+            'viewInventoryItems' => true,
+            'viewItemCategories' => true,
+            'viewUnits' => true,
+            'viewTechnologies' => true,
+            'manageUsers' => true,
+            'manageRoles' => true,
+        ]));
 });

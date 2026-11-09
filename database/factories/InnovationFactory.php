@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
-use App\InnovationStatus;
-use App\InnovationType;
-use App\InnovationVisibility;
+use App\Enums\InnovationStatus;
+use App\Enums\InnovationType;
+use App\Enums\InnovationVisibility;
 use App\Models\Innovation;
 use App\Models\InnovationCategory;
 use App\Models\User;

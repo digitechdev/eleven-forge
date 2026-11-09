@@ -1,19 +1,21 @@
 <?php
 
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Models\User;
-use App\UserRole;
-use App\UserStatus;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Inertia\Testing\AssertableInertia as Assert;
 
-test('login shows one local demo button per role without a registration link', function () {
-    $response = $this->get(route('login'));
-
-    foreach (UserRole::cases() as $role) {
-        $response->assertSee(route('demo.login', $role->value), false);
-    }
-
-    $response->assertDontSee('Sign up');
+test('login offers one local demo sign-in per role', function () {
+    $this->get(route('login'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('auth/Login')
+            ->where('demoAccounts', array_map(fn (UserRole $role): array => [
+                'label' => $role->label(),
+                'url' => route('demo.login', $role->value),
+            ], UserRole::cases())),
+        );
 });
 
 test('each demo button signs in the matching role', function (UserRole $role) {
@@ -42,7 +44,8 @@ test('demo sign in is unavailable outside local and testing environments', funct
     $this->seed(DatabaseSeeder::class);
     app()->detectEnvironment(fn (): string => 'production');
 
-    $this->get(route('login'))->assertDontSee('Demo accounts');
+    $this->get(route('login'))
+        ->assertInertia(fn (Assert $page) => $page->where('demoAccounts', []));
     $this->withoutMiddleware(PreventRequestForgery::class);
     $this->post(route('demo.login', UserRole::Admin->value))->assertNotFound();
     $this->assertGuest();

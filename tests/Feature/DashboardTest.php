@@ -1,28 +1,28 @@
 <?php
 
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected to the login page', function () {
-    $response = $this->get(route('dashboard'));
-    $response->assertRedirect(route('login'));
+    $this->get(route('dashboard'))->assertRedirect(route('login'));
 });
 
 test('authenticated users can visit the dashboard', function () {
     $user = User::factory()->create(['name' => 'Alex Rivera']);
-    $this->actingAs($user);
 
-    $response = $this->get(route('dashboard'));
-    $response->assertOk()
-        ->assertSee('Welcome back, Alex Rivera!')
-        ->assertSee('No notifications yet.')
-        ->assertSee('data-test="notification-bell"', false);
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('auth.user.name', 'Alex Rivera'),
+        );
 });
 
-test('the dashboard escapes the user name in its welcome message', function () {
+test('the dashboard does not render the user name as raw html', function () {
     $user = User::factory()->create(['name' => 'Alex <script>alert(1)</script>']);
 
     $this->actingAs($user)->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('Alex &lt;script&gt;alert(1)&lt;/script&gt;', false)
         ->assertDontSee('<script>alert(1)</script>', false);
 });

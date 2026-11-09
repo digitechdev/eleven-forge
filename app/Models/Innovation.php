@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use App\InnovationStatus;
-use App\InnovationType;
-use App\InnovationVisibility;
+use App\Enums\InnovationStatus;
+use App\Enums\InnovationType;
+use App\Enums\InnovationVisibility;
 use Database\Factories\InnovationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\InnovationMediaType;
+use App\Enums\InnovationMediaType;
 use Database\Factories\InnovationMediaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
