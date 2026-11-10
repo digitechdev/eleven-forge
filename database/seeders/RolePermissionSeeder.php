@@ -39,6 +39,8 @@ class RolePermissionSeeder extends Seeder
             AccessPermission::CatalogManage,
             AccessPermission::InnovationUpdateAny,
             AccessPermission::InnovationRestore,
+            AccessPermission::StockPost,
+            AccessPermission::ProductionManage,
         ];
 
         foreach ([

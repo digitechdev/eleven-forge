@@ -22,5 +22,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/innovations.php';
 require __DIR__.'/catalog.php';
 require __DIR__.'/inventory.php';
+require __DIR__.'/stock.php';
+require __DIR__.'/production.php';
 require __DIR__.'/administration.php';
 require __DIR__.'/settings.php';

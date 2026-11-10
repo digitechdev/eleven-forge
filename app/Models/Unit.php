@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'symbol', 'is_active'])]
+#[Fillable(['name', 'symbol', 'decimal_places', 'is_active'])]
 class Unit extends Model
 {
     /** @use HasFactory<UnitFactory> */
@@ -16,7 +16,7 @@ class Unit extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'decimal_places' => 'integer'];
     }
 
     /** @return HasMany<InventoryItem, $this> */

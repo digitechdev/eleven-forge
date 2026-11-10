@@ -31,6 +31,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $specification
  * @property string $quantity_on_hand
  * @property string $minimum_stock
+ * @property string $reorder_level
  * @property string|null $unit_cost
  * @property InventoryItemStatus $status
  * @property int|null $created_by
@@ -38,7 +39,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-#[Fillable(['item_code', 'category_id', 'default_unit_id', 'name', 'item_type', 'brand', 'model', 'manufacturer', 'part_number', 'description', 'specification', 'quantity_on_hand', 'minimum_stock', 'unit_cost', 'status', 'created_by'])]
+#[Fillable(['item_code', 'category_id', 'default_unit_id', 'name', 'item_type', 'brand', 'model', 'manufacturer', 'part_number', 'description', 'specification', 'quantity_on_hand', 'minimum_stock', 'reorder_level', 'unit_cost', 'status', 'created_by'])]
 class InventoryItem extends Model
 {
     /** @use HasFactory<InventoryItemFactory> */
@@ -85,7 +86,7 @@ class InventoryItem extends Model
 
     protected function casts(): array
     {
-        return ['item_type' => InventoryItemType::class, 'status' => InventoryItemStatus::class, 'quantity_on_hand' => 'decimal:3', 'minimum_stock' => 'decimal:3', 'unit_cost' => 'decimal:2'];
+        return ['item_type' => InventoryItemType::class, 'status' => InventoryItemStatus::class, 'quantity_on_hand' => 'decimal:3', 'minimum_stock' => 'decimal:3', 'reorder_level' => 'decimal:3', 'unit_cost' => 'decimal:2'];
     }
 
     /** @return BelongsTo<ItemCategory, $this> */
@@ -104,6 +105,30 @@ class InventoryItem extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** @return HasMany<InventoryBalance, $this> */
+    public function balances(): HasMany
+    {
+        return $this->hasMany(InventoryBalance::class);
+    }
+
+    /** @return HasMany<StockLedgerEntry, $this> */
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(StockLedgerEntry::class);
+    }
+
+    /** @return HasMany<InventoryItemPriceChange, $this> */
+    public function priceChanges(): HasMany
+    {
+        return $this->hasMany(InventoryItemPriceChange::class);
+    }
+
+    /** @return HasMany<InventoryItemMedia, $this> */
+    public function media(): HasMany
+    {
+        return $this->hasMany(InventoryItemMedia::class)->orderBy('sort_order')->orderBy('id');
     }
 
     /** @return HasMany<InnovationItem, $this> */

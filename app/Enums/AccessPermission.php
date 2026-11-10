@@ -11,6 +11,8 @@ enum AccessPermission: string
     case InnovationUpdateAny = 'innovations.update.any';
     case InnovationUpdateOwn = 'innovations.update.own';
     case InnovationRestore = 'innovations.restore';
+    case StockPost = 'inventory.post';
+    case ProductionManage = 'production.manage';
     case UserManage = 'users.manage';
     case RoleManage = 'roles.manage';
 
@@ -27,6 +29,8 @@ enum AccessPermission: string
             self::InnovationUpdateAny => 'Edit or archive any innovation, including its BOM, technologies, media, and visibility.',
             self::InnovationUpdateOwn => 'Edit or archive innovations the user created.',
             self::InnovationRestore => 'Restore archived (soft-deleted) innovations.',
+            self::StockPost => 'Post stock transactions (opening balance, receive, issue, return, adjustment) and reverse them.',
+            self::ProductionManage => 'Manage innovation build formulas and build orders, and complete production runs that consume stock.',
             self::UserManage => 'Create users, assign roles, and activate or deactivate accounts.',
             self::RoleManage => 'Create roles and permissions and change what each role grants.',
         };
