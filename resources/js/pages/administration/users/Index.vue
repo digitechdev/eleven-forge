@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
+    Check,
+    Copy,
+    KeyRound,
     Pencil,
     Plus,
     Power,
@@ -9,7 +12,7 @@ import {
     ShieldCheck,
     Users,
 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import Field from '@/components/common/Field.vue';
@@ -46,7 +49,7 @@ type ManagedUser = {
     innovations_count: number;
     updated_at: string | null;
     is_self: boolean;
-    can: { update: boolean; toggleStatus: boolean };
+    can: { update: boolean; toggleStatus: boolean; resetPassword: boolean };
 };
 
 type RoleOption = {
@@ -140,6 +143,70 @@ function submit(): void {
     } else {
         form.post(administration.users.store().url, options);
     }
+}
+
+const resetting = ref<ManagedUser | null>(null);
+const resetOpen = ref(false);
+const resetProcessing = ref(false);
+const issued = ref<{ userName: string; password: string } | null>(null);
+const issuedOpen = ref(false);
+const copied = ref(false);
+
+// The server flashes the temporary password once; it is never stored in plain text.
+const offFlash = router.on('flash', (event) => {
+    const flash = (event as CustomEvent).detail?.flash as
+        | { temporaryPassword?: { userName: string; password: string } }
+        | undefined;
+
+    if (flash?.temporaryPassword) {
+        issued.value = flash.temporaryPassword;
+        copied.value = false;
+        issuedOpen.value = true;
+    }
+});
+
+onBeforeUnmount(() => offFlash());
+
+function confirmReset(user: ManagedUser): void {
+    resetting.value = user;
+    resetOpen.value = true;
+}
+
+function resetPassword(): void {
+    if (!resetting.value) {
+        return;
+    }
+
+    router.post(
+        administration.users.temporaryPassword(resetting.value.id).url,
+        {},
+        {
+            preserveScroll: true,
+            onStart: () => (resetProcessing.value = true),
+            onFinish: () => {
+                resetProcessing.value = false;
+                resetOpen.value = false;
+            },
+        },
+    );
+}
+
+async function copyPassword(): Promise<void> {
+    if (!issued.value) {
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(issued.value.password);
+        copied.value = true;
+    } catch {
+        copied.value = false;
+    }
+}
+
+function closeIssued(): void {
+    issuedOpen.value = false;
+    issued.value = null;
 }
 
 function confirmToggle(user: ManagedUser): void {
@@ -284,6 +351,15 @@ function toggleStatus(): void {
                                         @click="openEdit(user)"
                                     >
                                         <Pencil />
+                                    </Button>
+                                    <Button
+                                        v-if="user.can.resetPassword"
+                                        size="icon"
+                                        variant="ghost"
+                                        :aria-label="`Set a temporary password for ${user.name}`"
+                                        @click="confirmReset(user)"
+                                    >
+                                        <KeyRound />
                                     </Button>
                                     <Button
                                         v-if="user.can.toggleStatus"
@@ -472,5 +548,40 @@ function toggleStatus(): void {
             :processing="toggleProcessing"
             @confirm="toggleStatus"
         />
+
+        <ConfirmDialog
+            v-model:open="resetOpen"
+            :title="`Set a temporary password for ${resetting?.name ?? 'user'}?`"
+            description="Their current password stops working immediately. You will see the new password once, so share it with them securely."
+            confirm-label="Generate password"
+            :processing="resetProcessing"
+            @confirm="resetPassword"
+        />
+
+        <FormDialog
+            :open="issuedOpen"
+            title="Temporary password"
+            :description="`Give this to ${issued?.userName ?? 'the user'} through a secure channel. It won't be shown again; ask them to change it from their profile after signing in.`"
+            :icon="KeyRound"
+            size="md"
+            @update:open="(value) => (value ? null : closeIssued())"
+        >
+            <div class="flex items-center gap-2 pb-2">
+                <code
+                    class="flex-1 rounded-lg border bg-muted/40 px-4 py-3 font-mono text-lg font-semibold tracking-wider select-all"
+                    >{{ issued?.password }}</code
+                >
+                <Button variant="outline" @click="copyPassword">
+                    <Check v-if="copied" />
+                    <Copy v-else />
+                    {{ copied ? 'Copied' : 'Copy' }}
+                </Button>
+            </div>
+            <div
+                class="sticky bottom-0 -mx-6 mt-4 flex justify-end border-t border-border/60 bg-background/80 px-6 py-3 backdrop-blur-md"
+            >
+                <Button @click="closeIssued">Done</Button>
+            </div>
+        </FormDialog>
     </div>
 </template>

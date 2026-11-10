@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Inventory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\UnitRequest;
 use App\Models\Unit;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -29,12 +30,13 @@ class UnitController extends Controller
                 ->when(($filters['status'] ?? null) === 'active', fn ($query) => $query->where('is_active', true))
                 ->when(($filters['status'] ?? null) === 'inactive', fn ($query) => $query->where('is_active', false))
                 ->orderBy('name')
-                ->paginate(20)
+                ->paginate(PerPage::fromRequest($request))
                 ->withQueryString()
                 ->through(fn (Unit $unit): array => [
                     'id' => $unit->id,
                     'name' => $unit->name,
                     'symbol' => $unit->symbol,
+                    'decimal_places' => $unit->decimal_places,
                     'is_active' => $unit->is_active,
                     'usage_count' => $unit->inventory_items_count + $unit->innovation_items_count,
                 ]),

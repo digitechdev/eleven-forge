@@ -28,9 +28,13 @@ import { useFilters } from '@/composables/useFilters';
 import technologies from '@/routes/technologies';
 import type { Paginated } from '@/types';
 import { index as technologiesIndexCrumb } from '@/routes/technologies';
+import { index as setupCrumb } from '@/routes/inventory/locations';
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs';
 
-useBreadcrumbs([{ title: 'Technologies', href: technologiesIndexCrumb() }]);
+useBreadcrumbs([
+    { title: 'Setup', href: setupCrumb() },
+    { title: 'Technologies', href: technologiesIndexCrumb() },
+]);
 
 type TechnologyInnovation = {
     id: number;

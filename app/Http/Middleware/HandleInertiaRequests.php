@@ -4,10 +4,14 @@ namespace App\Http\Middleware;
 
 use App\Enums\AccessPermission;
 use App\Enums\UserRole;
+use App\Models\BuildOrder;
 use App\Models\Innovation;
 use App\Models\InnovationCategory;
 use App\Models\InventoryItem;
 use App\Models\ItemCategory;
+use App\Models\Location;
+use App\Models\ProductionRun;
+use App\Models\StockLedgerEntry;
 use App\Models\Technology;
 use App\Models\Unit;
 use App\Models\User;
@@ -75,6 +79,10 @@ class HandleInertiaRequests extends Middleware
                 'viewInventoryItems' => $gate->allows('viewAny', InventoryItem::class),
                 'viewItemCategories' => $gate->allows('viewAny', ItemCategory::class),
                 'viewUnits' => $gate->allows('viewAny', Unit::class),
+                'viewStock' => $gate->allows('viewAny', StockLedgerEntry::class),
+                'viewLocations' => $gate->allows('viewAny', Location::class),
+                'viewBuildOrders' => $gate->allows('viewAny', BuildOrder::class),
+                'viewProductionRuns' => $gate->allows('viewAny', ProductionRun::class),
                 'viewTechnologies' => $gate->allows('viewAny', Technology::class),
                 'manageUsers' => $gate->allows('viewAny', User::class),
                 'manageRoles' => $gate->allows(AccessPermission::RoleManage->value),

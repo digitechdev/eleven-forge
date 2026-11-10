@@ -343,8 +343,42 @@
 }
 
 /* Tables inside panels: quiet headers, airy rows and a smooth hover. */
+/* Headings stay on one line; cells line up vertically, numbers line up by digit. */
+[data-slot='panel'] table thead th {
+    white-space: nowrap;
+}
+
+[data-slot='panel'] table td {
+    vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+}
+
 [data-slot='panel'] table tbody tr {
     transition: background-color 180ms ease;
+}
+
+/*
+  Wide tables scroll sideways inside their panel. A soft edge shows there is more to see
+  instead of columns being silently cut off.
+*/
+[data-slot='panel'] .overflow-x-auto:has(> table) {
+    background:
+        linear-gradient(to right, var(--card) 30%, transparent) left / 2.5rem
+            100% no-repeat local,
+        linear-gradient(to left, var(--card) 30%, transparent) right / 2.5rem
+            100% no-repeat local,
+        radial-gradient(
+                farthest-side at 0 50%,
+                color-mix(in oklab, var(--foreground) 12%, transparent),
+                transparent
+            )
+            left / 0.75rem 100% no-repeat scroll,
+        radial-gradient(
+                farthest-side at 100% 50%,
+                color-mix(in oklab, var(--foreground) 12%, transparent),
+                transparent
+            )
+            right / 0.75rem 100% no-repeat scroll;
 }
 
 [data-slot='panel'] table tbody tr:hover {

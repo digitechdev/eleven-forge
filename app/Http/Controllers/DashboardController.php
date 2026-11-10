@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BuildOrderStatus;
 use App\Enums\InnovationStatus;
 use App\Enums\InnovationType;
 use App\Enums\InnovationVisibility;
-use App\Enums\InventoryItemStatus;
+use App\Enums\StockStatus;
+use App\Models\BuildOrder;
 use App\Models\Innovation;
 use App\Models\InventoryItem;
-use App\Models\Unit;
+use App\Models\Location;
+use App\Models\ProductionRun;
+use App\Models\StockLedgerEntry;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -24,11 +28,23 @@ class DashboardController extends Controller
     {
         $canViewInnovations = Gate::allows('viewAny', Innovation::class);
         $canViewInventory = Gate::allows('viewAny', InventoryItem::class);
+        $canViewStock = Gate::allows('viewAny', StockLedgerEntry::class);
+        $canViewProduction = Gate::allows('viewAny', BuildOrder::class);
+
+        $location = $canViewStock && $request->integer('location') > 0
+            ? Location::query()->find($request->integer('location'))
+            : null;
 
         return Inertia::render('Dashboard', [
             'innovationStats' => $canViewInnovations ? $this->innovationStats() : null,
-            'lowStockItems' => $canViewInventory ? Inertia::defer(fn (): array => $this->lowStockItems(), 'activity') : null,
+            'stockStats' => $canViewStock ? $this->stockStats($location) : null,
+            'locations' => $canViewStock ? Location::query()->orderBy('name')->get(['id', 'name'])->map(fn (Location $option): array => ['value' => $option->id, 'label' => $option->name])->all() : null,
+            'filters' => ['location' => $location?->id],
+            'lowStockItems' => $canViewInventory ? Inertia::defer(fn (): array => $this->lowStockItems($location), 'activity') : null,
             'recentInnovations' => $canViewInnovations ? Inertia::defer(fn (): array => $this->recentInnovations(), 'activity') : null,
+            'activeBuildOrders' => $canViewProduction ? Inertia::defer(fn (): array => $this->activeBuildOrders($location), 'activity') : null,
+            'recentRuns' => $canViewProduction ? Inertia::defer(fn (): array => $this->recentRuns($location), 'activity') : null,
+            'recentMovements' => $canViewStock ? Inertia::defer(fn (): array => $this->recentMovements($location), 'activity') : null,
             'shortcuts' => $this->shortcuts(),
         ]);
     }
@@ -63,19 +79,39 @@ class DashboardController extends Controller
     }
 
     /**
-     * The five active items furthest below their minimum stock.
+     * Stock value plus low- and out-of-stock counts, overall or at one location.
+     * Uses the same rules as the Items page, so these figures match what its filters list.
+     *
+     * @return array{value: float, low: int, out: int, url: string}
+     */
+    private function stockStats(?Location $location): array
+    {
+        $locationId = $location?->id;
+
+        return [
+            'value' => round((float) InventoryItem::query()
+                ->selectRaw('sum('.InventoryItem::onHandQuantitySql($locationId).' * coalesce(inventory_items.unit_cost, 0)) as stock_value', InventoryItem::stockBindings($locationId))
+                ->value('stock_value'), 2),
+            'low' => InventoryItem::query()->withStockStatus(StockStatus::Low, $locationId)->count(),
+            'out' => InventoryItem::query()->withStockStatus(StockStatus::Out, $locationId)->count(),
+            'url' => route('inventory.items.index', array_filter(['location' => $locationId])),
+        ];
+    }
+
+    /**
+     * The five items closest to running out among those at low stock, overall or at one location.
      *
      * @return array<int, array{id: int, item_code: string, name: string, quantity_on_hand: float, minimum_stock: float, unit: string|null, url: string|null}>
      */
-    private function lowStockItems(): array
+    private function lowStockItems(?Location $location): array
     {
+        $locationId = $location?->id;
 
         return InventoryItem::query()
+            ->withStockQuantities($locationId)
+            ->withStockStatus(StockStatus::Low, $locationId)
             ->with('defaultUnit:id,symbol')
-            ->where('status', InventoryItemStatus::Active)
-            ->where('minimum_stock', '>', 0)
-            ->whereColumn('quantity_on_hand', '<=', 'minimum_stock')
-            ->orderByRaw('quantity_on_hand / minimum_stock')
+            ->orderBy('stock_available')
             ->orderBy('name')
             ->limit(5)
             ->get()
@@ -83,10 +119,91 @@ class DashboardController extends Controller
                 'id' => $item->id,
                 'item_code' => $item->item_code,
                 'name' => $item->name,
-                'quantity_on_hand' => (float) $item->quantity_on_hand,
+                'quantity_on_hand' => (float) $item->getAttribute('stock_available'),
                 'minimum_stock' => (float) $item->minimum_stock,
-                'unit' => $item->defaultUnit?->symbol,
+                'unit' => $item->defaultUnit->symbol,
                 'url' => route('inventory.items.show', $item),
+            ])
+            ->all();
+    }
+
+    /**
+     * Planned and in-progress build orders, overall or consuming from one location.
+     *
+     * @return array{count: int, orders: array<int, array{id: int, order_number: string, innovation: string, status_label: string, planned: float, produced: float, url: string}>}
+     */
+    private function activeBuildOrders(?Location $location): array
+    {
+        $query = BuildOrder::query()
+            ->whereIn('status', [BuildOrderStatus::Planned, BuildOrderStatus::InProgress])
+            ->when($location, fn ($query, Location $location) => $query->where('location_id', $location->id));
+
+        return [
+            'count' => (clone $query)->count(),
+            'orders' => $query->with('innovation:id,name')
+                ->latest('updated_at')
+                ->limit(5)
+                ->get()
+                ->map(fn (BuildOrder $order): array => [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'innovation' => $order->innovation->name,
+                    'status_label' => $order->status->label(),
+                    'planned' => (float) $order->planned_quantity,
+                    'produced' => (float) $order->produced_quantity,
+                    'url' => route('production.build-orders.show', $order),
+                ])
+                ->all(),
+        ];
+    }
+
+    /**
+     * The five most recently completed production runs.
+     *
+     * @return array<int, array{id: int, run_number: string, innovation: string, output_quantity: float, unit_cost: float, completed_at: string, url: string}>
+     */
+    private function recentRuns(?Location $location): array
+    {
+        return ProductionRun::query()
+            ->with('innovation:id,name')
+            ->when($location, fn ($query, Location $location) => $query->where('location_id', $location->id))
+            ->latest('completed_at')
+            ->limit(5)
+            ->get()
+            ->map(fn (ProductionRun $run): array => [
+                'id' => $run->id,
+                'run_number' => $run->run_number,
+                'innovation' => $run->innovation->name,
+                'output_quantity' => (float) $run->output_quantity,
+                'unit_cost' => (float) $run->unit_production_cost,
+                'completed_at' => $run->completed_at->toIso8601String(),
+                'url' => route('production.runs.show', $run),
+            ])
+            ->all();
+    }
+
+    /**
+     * The five latest stock ledger movements.
+     *
+     * @return array<int, array{id: int, entry_number: string, item: string, location: string, type_label: string, quantity: float, posted_at: string}>
+     */
+    private function recentMovements(?Location $location): array
+    {
+        return StockLedgerEntry::query()
+            ->with(['inventoryItem:id,name', 'location:id,name'])
+            ->when($location, fn ($query, Location $location) => $query->where('location_id', $location->id))
+            ->latest('posted_at')
+            ->latest('id')
+            ->limit(5)
+            ->get()
+            ->map(fn (StockLedgerEntry $entry): array => [
+                'id' => $entry->id,
+                'entry_number' => $entry->entry_number,
+                'item' => $entry->inventoryItem->name,
+                'location' => $entry->location->name,
+                'type_label' => $entry->transaction_type->label(),
+                'quantity' => round((float) $entry->quantity_in - (float) $entry->quantity_out, 3),
+                'posted_at' => $entry->posted_at->toIso8601String(),
             ])
             ->all();
     }
@@ -139,18 +256,27 @@ class DashboardController extends Controller
         if (Gate::allows('create', InventoryItem::class)) {
             $shortcuts[] = [
                 'key' => 'manage-items',
-                'label' => __('Manage inventory items'),
-                'description' => __('Update stock levels, specifications, and costs.'),
+                'label' => __('Items'),
+                'description' => __('Add items, specifications, and costs, and see stock by location.'),
                 'href' => route('inventory.items.index'),
             ];
         }
 
-        if (Gate::allows('create', Unit::class)) {
+        if (Gate::allows('create', StockLedgerEntry::class)) {
             $shortcuts[] = [
-                'key' => 'manage-units',
-                'label' => __('Manage units'),
-                'description' => __('Maintain the units used by items and bills of materials.'),
-                'href' => route('inventory.units.index'),
+                'key' => 'post-stock',
+                'label' => __('Post stock'),
+                'description' => __('Receive, issue, return, or adjust stock in Stock movements.'),
+                'href' => route('inventory.ledger.index'),
+            ];
+        }
+
+        if (Gate::allows('create', BuildOrder::class)) {
+            $shortcuts[] = [
+                'key' => 'build-orders',
+                'label' => __('Builds'),
+                'description' => __('Plan builds of an innovation and complete production runs.'),
+                'href' => route('production.build-orders.index'),
             ];
         }
 

@@ -29,6 +29,7 @@ class InventoryItemFactory extends Factory
             'item_type' => InventoryItemType::Component,
             'quantity_on_hand' => 0,
             'minimum_stock' => 0,
+            'reorder_level' => 0,
             'status' => InventoryItemStatus::Active,
         ];
     }

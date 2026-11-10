@@ -1,14 +1,21 @@
 <?php
 
+use App\Enums\AccessPermission;
+use App\Enums\BuildOrderStatus;
 use App\Enums\InnovationStatus;
 use App\Enums\InnovationVisibility;
 use App\Enums\InventoryItemStatus;
+use App\Enums\StockTransactionType;
+use App\Models\BuildOrder;
 use App\Models\Innovation;
 use App\Models\InventoryItem;
+use App\Models\Location;
 use App\Models\User;
+use App\Services\StockLedgerService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
+use Spatie\Permission\Models\Role;
 
 test('guests are redirected to the login page', function () {
     $this->get(route('dashboard'))->assertRedirect(route('login'));
@@ -61,7 +68,7 @@ test('the dashboard summarises innovations and lists only low-stock items', func
                 ->where('lowStockItems.0.id', $low->id)
                 ->has('recentInnovations', 3),
             )
-            ->where('shortcuts', fn ($shortcuts) => collect($shortcuts)->pluck('key')->all() === ['create-innovation', 'manage-items', 'manage-units']),
+            ->where('shortcuts', fn ($shortcuts) => collect($shortcuts)->pluck('key')->all() === ['create-innovation', 'manage-items', 'post-stock', 'build-orders']),
         );
 });
 
@@ -111,4 +118,57 @@ test('sample innovations never overwrite real records with registry codes', func
 
     expect($real->fresh()->name)->toBe('EcoTrack')
         ->and(Innovation::query()->count())->toBe(13);
+});
+
+test('stock and production figures can be narrowed to one location', function () {
+    $this->seed(RolePermissionSeeder::class);
+    $ledger = app(StockLedgerService::class);
+    $warehouse = Location::factory()->create();
+    $workshop = Location::factory()->create();
+    $bolts = InventoryItem::factory()->create(['unit_cost' => 10, 'minimum_stock' => 5]);
+    $ledger->post($bolts, $warehouse, StockTransactionType::Receive, 20, 0);
+    $ledger->post($bolts, $workshop, StockTransactionType::Receive, 3, 0);
+    BuildOrder::factory()->create(['location_id' => $warehouse->id, 'status' => BuildOrderStatus::Planned]);
+    BuildOrder::factory()->create(['location_id' => $workshop->id, 'status' => BuildOrderStatus::Completed]);
+
+    $this->actingAs(User::factory()->manager()->create());
+
+    $this->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stockStats.value', 230)
+            ->where('stockStats.low', 0)
+            ->has('locations', 3)
+            ->loadDeferredProps('activity', fn (Assert $reload) => $reload
+                ->where('activeBuildOrders.count', 1)
+                ->has('recentMovements', 2),
+            ),
+        );
+
+    $this->get(route('dashboard', ['location' => $workshop->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.location', $workshop->id)
+            ->where('stockStats.value', 30)
+            ->where('stockStats.low', 1)
+            ->loadDeferredProps('activity', fn (Assert $reload) => $reload
+                ->where('activeBuildOrders.count', 0)
+                ->has('recentMovements', 1)
+                ->where('lowStockItems.0.id', $bolts->id),
+            ),
+        );
+});
+
+test('users without stock access get no stock figures or locations', function () {
+    $this->seed(RolePermissionSeeder::class);
+    $role = Role::create(['name' => 'INNOVATOR_ONLY', 'guard_name' => 'web']);
+    $role->givePermissionTo(AccessPermission::InnovationView->value);
+    $user = User::factory()->create();
+    $user->assignRole($role);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stockStats', null)
+            ->where('locations', null)
+            ->where('recentMovements', null),
+        );
 });

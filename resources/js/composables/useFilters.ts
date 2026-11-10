@@ -16,11 +16,23 @@ export function useFilters<T extends Record<string, FilterValue>>(
     watchDebounced(
         filters,
         () => {
-            const query = Object.fromEntries(
+            const query: Record<string, string | number> = Object.fromEntries(
                 Object.entries(filters).filter(
-                    ([, v]) => v !== null && v !== undefined && v !== '',
+                    (entry): entry is [string, string | number] =>
+                        entry[1] !== null &&
+                        entry[1] !== undefined &&
+                        entry[1] !== '',
                 ),
             );
+
+            // Keep the chosen page size; changing a filter starts again from page 1.
+            const perPage = new URLSearchParams(window.location.search).get(
+                'per_page',
+            );
+
+            if (perPage) {
+                query.per_page = perPage;
+            }
 
             router.get(url(), query, {
                 preserveState: true,

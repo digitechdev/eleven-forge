@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\InventoryItemStatus;
 use App\Enums\InventoryItemType;
+use App\Enums\StockStatus;
 use Database\Factories\InventoryItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -152,6 +153,80 @@ class InventoryItem extends Model
     protected function lowStock(Builder $query): void
     {
         $query->where('minimum_stock', '>', 0)->whereColumn('quantity_on_hand', '<=', 'minimum_stock');
+    }
+
+    /**
+     * SQL for the quantity on hand: the item's total, or its balance at one location (0 without one).
+     * With a location it holds one "?" placeholder; bind stockBindings() to it.
+     *
+     * @return literal-string
+     */
+    public static function onHandQuantitySql(?int $locationId = null): string
+    {
+        return $locationId === null
+            ? 'inventory_items.quantity_on_hand'
+            : 'coalesce((select stock_balances.on_hand_quantity from inventory_balances as stock_balances where stock_balances.inventory_item_id = inventory_items.id and stock_balances.location_id = ?), 0)';
+    }
+
+    /**
+     * SQL for the available quantity (on hand minus reserved): in total, or at one location (0 without a balance there).
+     * With a location it holds one "?" placeholder; bind stockBindings() to it.
+     *
+     * @return literal-string
+     */
+    public static function availableQuantitySql(?int $locationId = null): string
+    {
+        return $locationId === null
+            ? '(inventory_items.quantity_on_hand - coalesce((select sum(stock_balances.reserved_quantity) from inventory_balances as stock_balances where stock_balances.inventory_item_id = inventory_items.id), 0))'
+            : 'coalesce((select stock_balances.on_hand_quantity - stock_balances.reserved_quantity from inventory_balances as stock_balances where stock_balances.inventory_item_id = inventory_items.id and stock_balances.location_id = ?), 0)';
+    }
+
+    /**
+     * Bindings for one onHandQuantitySql() or availableQuantitySql() expression.
+     *
+     * @return list<int>
+     */
+    public static function stockBindings(?int $locationId = null): array
+    {
+        return $locationId === null ? [] : [$locationId];
+    }
+
+    /**
+     * Add stock_on_hand and stock_available columns, in total or at one location.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withStockQuantities(Builder $query, ?int $locationId = null): void
+    {
+        $bindings = static::stockBindings($locationId);
+
+        $query->select('inventory_items.*')
+            ->selectRaw(static::onHandQuantitySql($locationId).' as stock_on_hand', $bindings)
+            ->selectRaw(static::availableQuantitySql($locationId).' as stock_available', $bindings);
+    }
+
+    /**
+     * Items whose stock status (see StockStatus::forQuantity()) matches, in total or at one location.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withStockStatus(Builder $query, StockStatus $status, ?int $locationId = null): void
+    {
+        $available = static::availableQuantitySql($locationId);
+        $bindings = static::stockBindings($locationId);
+
+        match ($status) {
+            StockStatus::Out => $query->whereRaw("{$available} <= 0", $bindings),
+            StockStatus::Low => $query->whereRaw("{$available} > 0", $bindings)
+                ->where('inventory_items.minimum_stock', '>', 0)
+                ->whereRaw("{$available} <= inventory_items.minimum_stock", $bindings),
+            StockStatus::In => $query->whereRaw("{$available} > 0", $bindings)
+                ->where(fn (Builder $query) => $query
+                    ->where('inventory_items.minimum_stock', '<=', 0)
+                    ->orWhereRaw("{$available} > inventory_items.minimum_stock", $bindings)),
+        };
     }
 
     /**

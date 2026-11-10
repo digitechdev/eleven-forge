@@ -4,23 +4,27 @@ namespace Database\Seeders;
 
 use App\Enums\InventoryItemStatus;
 use App\Enums\InventoryItemType;
+use App\Enums\StockTransactionType;
 use App\Enums\UserRole;
 use App\Models\InventoryItem;
 use App\Models\ItemCategory;
+use App\Models\Location;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\StockLedgerService;
 use Illuminate\Database\Seeder;
 
 /**
  * Sample inventory items used by the sample innovations' bills of materials.
- * Relies on the item category and unit seeders; safe to run repeatedly.
+ * Stock is posted as an opening balance at the Main location, only for items without
+ * ledger entries yet. Relies on the item category and unit seeders; safe to run repeatedly.
  */
 class InventoryItemSeeder extends Seeder
 {
     /**
      * Run the database seeds.
      */
-    public function run(): void
+    public function run(StockLedgerService $ledger): void
     {
         if (! app()->environment(['local', 'testing'])) {
             return;
@@ -29,9 +33,10 @@ class InventoryItemSeeder extends Seeder
         $author = User::role(UserRole::SuperAdmin->value)->first() ?? User::query()->first();
         $categoryIds = ItemCategory::query()->whereNotNull('parent_id')->pluck('id', 'name');
         $unitIds = Unit::query()->pluck('id', 'symbol');
+        $main = Location::query()->firstOrCreate(['code' => Location::MAIN_CODE], ['name' => 'Main', 'is_active' => true]);
 
         foreach ($this->items() as $code => [$name, $category, $unit, $type, $brand, $onHand, $minimum, $cost]) {
-            InventoryItem::query()->withTrashed()->updateOrCreate(
+            $item = InventoryItem::query()->withTrashed()->updateOrCreate(
                 ['item_code' => $code],
                 [
                     'name' => $name,
@@ -39,13 +44,19 @@ class InventoryItemSeeder extends Seeder
                     'default_unit_id' => $unitIds[$unit],
                     'item_type' => $type,
                     'brand' => $brand,
-                    'quantity_on_hand' => $onHand,
                     'minimum_stock' => $minimum,
                     'unit_cost' => $cost,
                     'status' => InventoryItemStatus::Active,
                     'created_by' => $author?->id,
                 ],
             );
+
+            if ($onHand > 0 && ! $item->ledgerEntries()->exists()) {
+                $ledger->post($item, $main, StockTransactionType::OpeningBalance, (float) $onHand, 0, null, $author, [
+                    'reference_number' => 'SEED',
+                    'notes' => 'Sample opening stock.',
+                ]);
+            }
         }
     }
 

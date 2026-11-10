@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\FormulaStatus;
 use App\Enums\InnovationStatus;
 use App\Enums\InnovationType;
 use App\Enums\InnovationVisibility;
@@ -11,11 +12,13 @@ use App\Models\InnovationCategory;
 use App\Models\InventoryItem;
 use App\Models\Technology;
 use App\Models\User;
+use App\Services\InnovationFormulaService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
- * Sample innovations with bills of materials and technologies, for local and testing environments.
+ * Sample innovations with bills of materials (as an active version 1 formula) and technologies,
+ * for local and testing environments.
  * Relies on the innovation category, technology, and inventory item seeders; safe to run repeatedly.
  */
 class InnovationSeeder extends Seeder
@@ -33,6 +36,7 @@ class InnovationSeeder extends Seeder
         $items = InventoryItem::query()->get(['id', 'item_code', 'default_unit_id'])->keyBy('item_code');
         $technologyIds = Technology::query()->pluck('id', 'name');
         $categoryIds = InnovationCategory::query()->pluck('id', 'slug');
+        $formulas = app(InnovationFormulaService::class);
 
         foreach ($this->innovations() as $code => $data) {
             $innovation = Innovation::query()->withTrashed()->updateOrCreate(
@@ -46,18 +50,28 @@ class InnovationSeeder extends Seeder
                 ],
             );
 
-            foreach ($data['bom'] as $order => [$itemCode, $quantity, $usage]) {
-                $item = $items[$itemCode];
-
-                $innovation->innovationItems()->updateOrCreate(
-                    ['inventory_item_id' => $item->id],
-                    [
-                        'unit_id' => $item->default_unit_id,
-                        'quantity_required' => $quantity,
-                        'usage_description' => $usage,
-                        'sort_order' => $order,
-                    ],
+            if ($data['bom'] !== []) {
+                $formula = $innovation->formulas()->firstOrCreate(
+                    ['version' => 1],
+                    ['yield_quantity' => 1, 'status' => FormulaStatus::Active, 'activated_at' => now()],
                 );
+
+                foreach ($data['bom'] as $order => [$itemCode, $quantity, $usage]) {
+                    $item = $items[$itemCode];
+
+                    $formula->items()->updateOrCreate(
+                        ['inventory_item_id' => $item->id],
+                        [
+                            'innovation_id' => $innovation->id,
+                            'unit_id' => $item->default_unit_id,
+                            'quantity_required' => $quantity,
+                            'usage_description' => $usage,
+                            'sort_order' => $order,
+                        ],
+                    );
+                }
+
+                $formulas->refreshCosting($formula);
             }
 
             foreach ($data['technologies'] as $name => [$version, $purpose]) {
@@ -70,7 +84,7 @@ class InnovationSeeder extends Seeder
     }
 
     /**
-     * Innovation code => attributes plus category name, BOM lines ([item code, quantity, usage]),
+     * Innovation code => attributes (optionally an internal markup) plus category name, BOM lines ([item code, quantity, usage]),
      * and technologies (name => [version, purpose]).
      *
      * @return array<string, array<string, mixed>>
@@ -93,6 +107,7 @@ class InnovationSeeder extends Seeder
                 'visibility' => InnovationVisibility::Public,
                 'is_featured' => true,
                 'developed_at' => '2026-03-15',
+                'markup_percentage' => 35,
                 'bom' => [
                     ['DEMO-ITM-001', 1, 'Edge AI inference'],
                     ['DEMO-ITM-004', 1, 'Item recognition camera'],
@@ -238,6 +253,7 @@ class InnovationSeeder extends Seeder
                 'visibility' => InnovationVisibility::Public,
                 'is_featured' => false,
                 'developed_at' => '2026-05-20',
+                'markup_percentage' => 25,
                 'bom' => [
                     ['DEMO-ITM-016', 1, 'Weight measurement'],
                     ['DEMO-ITM-007', 1, 'Scale controller'],
@@ -341,6 +357,7 @@ class InnovationSeeder extends Seeder
                 'visibility' => InnovationVisibility::Public,
                 'is_featured' => true,
                 'developed_at' => '2026-08-05',
+                'markup_percentage' => 40,
                 'bom' => [
                     ['DEMO-ITM-007', 1, 'Node controller'],
                     ['DEMO-ITM-019', 2, 'Climate sensing'],

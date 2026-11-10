@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Database\Factories\LocationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -46,5 +48,32 @@ class Location extends Model
     public function ledgerEntries(): HasMany
     {
         return $this->hasMany(StockLedgerEntry::class);
+    }
+
+    /**
+     * Whether this is the default location, which can never be deleted.
+     */
+    public function isMain(): bool
+    {
+        return $this->code === self::MAIN_CODE;
+    }
+
+    /**
+     * Whether stock or history references this location, so it must be deactivated rather than deleted.
+     */
+    public function isInUse(): bool
+    {
+        return $this->balances()->exists() || $this->ledgerEntries()->exists();
+    }
+
+    /**
+     * Locations that can receive new postings.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function active(Builder $query): void
+    {
+        $query->where('is_active', true);
     }
 }

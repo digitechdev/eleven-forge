@@ -13,6 +13,7 @@ Route::middleware(['auth', 'verified'])->prefix('administration')->name('adminis
     Route::post('users', [UserController::class, 'store'])->name('users.store');
     Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::patch('users/{user}/status', [UserController::class, 'toggleStatus'])->name('users.status');
+    Route::post('users/{user}/temporary-password', [UserController::class, 'temporaryPassword'])->name('users.temporary-password');
 
     Route::middleware('can:'.AccessPermission::RoleManage->value)->group(function () {
         Route::get('roles', [RoleController::class, 'index'])->name('roles.index');

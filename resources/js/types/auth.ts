@@ -19,6 +19,10 @@ export type Access = {
         viewInventoryItems: boolean;
         viewItemCategories: boolean;
         viewUnits: boolean;
+        viewStock: boolean;
+        viewLocations: boolean;
+        viewBuildOrders: boolean;
+        viewProductionRuns: boolean;
         viewTechnologies: boolean;
         manageUsers: boolean;
         manageRoles: boolean;

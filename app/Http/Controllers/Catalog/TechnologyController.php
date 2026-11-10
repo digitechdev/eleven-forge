@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\TechnologyRequest;
 use App\Models\InnovationTechnology;
 use App\Models\Technology;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -35,7 +36,7 @@ class TechnologyController extends Controller
                 ->when($filters['category'] ?? null, fn ($query, string $category) => $query->where('category', $category))
                 ->when($filters['status'] ?? null, fn ($query, string $status) => $query->where('status', $status))
                 ->orderBy('name')
-                ->paginate(20)
+                ->paginate(PerPage::fromRequest($request))
                 ->withQueryString()
                 ->through(fn (Technology $technology): array => [
                     'id' => $technology->id,

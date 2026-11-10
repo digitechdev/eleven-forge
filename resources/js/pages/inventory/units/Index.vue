@@ -20,12 +20,12 @@ import { Label } from '@/components/ui/label';
 import { useFilters } from '@/composables/useFilters';
 import units from '@/routes/inventory/units';
 import type { Paginated } from '@/types';
-import { index as itemsIndexCrumb } from '@/routes/inventory/items';
 import { index as unitsIndexCrumb } from '@/routes/inventory/units';
+import { index as setupCrumb } from '@/routes/inventory/locations';
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs';
 
 useBreadcrumbs([
-    { title: 'Inventory', href: itemsIndexCrumb() },
+    { title: 'Setup', href: setupCrumb() },
     { title: 'Units', href: unitsIndexCrumb() },
 ]);
 
@@ -33,6 +33,7 @@ type Unit = {
     id: number;
     name: string;
     symbol: string;
+    decimal_places: number;
     is_active: boolean;
     usage_count: number;
 };
@@ -58,7 +59,19 @@ const statusOptions = [
 
 const dialogOpen = ref(false);
 const editing = ref<Unit | null>(null);
-const form = useForm({ name: '', symbol: '', is_active: true });
+const precisionOptions = [
+    { value: 0, label: 'Whole units (0)' },
+    { value: 1, label: '1 decimal place' },
+    { value: 2, label: '2 decimal places' },
+    { value: 3, label: '3 decimal places' },
+];
+
+const form = useForm({
+    name: '',
+    symbol: '',
+    decimal_places: 0 as number,
+    is_active: true,
+});
 
 const deleting = ref<Unit | null>(null);
 const deleteOpen = ref(false);
@@ -66,7 +79,12 @@ const deleteProcessing = ref(false);
 
 function openCreate(): void {
     editing.value = null;
-    form.defaults({ name: '', symbol: '', is_active: true });
+    form.defaults({
+        name: '',
+        symbol: '',
+        decimal_places: 0,
+        is_active: true,
+    });
     form.reset();
     form.clearErrors();
     dialogOpen.value = true;
@@ -77,6 +95,7 @@ function openEdit(unit: Unit): void {
     form.defaults({
         name: unit.name,
         symbol: unit.symbol,
+        decimal_places: unit.decimal_places,
         is_active: unit.is_active,
     });
     form.reset();
@@ -160,6 +179,9 @@ function destroy(): void {
                         <tr class="label-mono text-muted-foreground">
                             <th class="px-5 py-2.5 font-medium">Name</th>
                             <th class="px-5 py-2.5 font-medium">Symbol</th>
+                            <th class="px-5 py-2.5 text-right font-medium">
+                                Decimals
+                            </th>
                             <th class="px-5 py-2.5 font-medium">Status</th>
                             <th class="px-5 py-2.5 text-right font-medium">
                                 In use
@@ -180,6 +202,11 @@ function destroy(): void {
                             </td>
                             <td class="px-5 py-3 font-mono">
                                 {{ unit.symbol }}
+                            </td>
+                            <td
+                                class="px-5 py-3 text-right text-muted-foreground tabular-nums"
+                            >
+                                {{ unit.decimal_places }}
                             </td>
                             <td class="px-5 py-3">
                                 <Badge
@@ -259,6 +286,19 @@ function destroy(): void {
                             id="unit-symbol"
                             v-model="form.symbol"
                             placeholder="e.g. pc"
+                        />
+                    </Field>
+                    <Field
+                        label="Precision"
+                        for="unit-decimal-places"
+                        :error="form.errors.decimal_places"
+                        hint="How many decimal places quantities in this unit may have."
+                        required
+                    >
+                        <SelectInput
+                            id="unit-decimal-places"
+                            v-model="form.decimal_places"
+                            :options="precisionOptions"
                         />
                     </Field>
                     <Label class="flex items-center gap-2.5 font-normal">

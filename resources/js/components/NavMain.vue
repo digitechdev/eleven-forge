@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { ChevronRight } from '@lucide/vue';
+import type { Component } from 'vue';
+import { ref } from 'vue';
 import {
     SidebarGroup,
     SidebarGroupLabel,
@@ -11,35 +14,100 @@ import {
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import type { NavItem } from '@/types';
 
-withDefaults(
+const props = withDefaults(
     defineProps<{
         items: NavItem[];
         label?: string;
+        /** Show the label as a small heading above the links. */
+        showLabel?: boolean;
+        /** Fold the group behind a menu-style toggle; it opens on its own when one of its pages is current. */
+        collapsible?: boolean;
+        /** Icon for the collapsible toggle. */
+        icon?: Component;
     }>(),
-    { label: 'Platform' },
+    { label: 'Platform', showLabel: true, collapsible: false },
 );
 
 const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
+
+const storageKey = `sidebar-group:${props.label}`;
+
+function initiallyOpen(): boolean {
+    if (!props.collapsible || props.items.some((item) => active(item))) {
+        return true;
+    }
+
+    try {
+        return window.localStorage.getItem(storageKey) === 'open';
+    } catch {
+        return false;
+    }
+}
+
+const open = ref(initiallyOpen());
+
+function toggle(): void {
+    open.value = !open.value;
+
+    try {
+        window.localStorage.setItem(storageKey, open.value ? 'open' : 'closed');
+    } catch {
+        // Remembering the group state is a convenience only.
+    }
+}
 
 function active(item: NavItem): boolean {
     if (item.action) {
         return false;
     }
 
-    return item.exact
-        ? isCurrentUrl(item.href)
-        : isCurrentOrParentUrl(item.href);
+    const matches = (href: NavItem['href']): boolean =>
+        item.exact ? isCurrentUrl(href) : isCurrentOrParentUrl(href);
+
+    return matches(item.href) || (item.alsoActiveOn ?? []).some(matches);
 }
 </script>
 
 <template>
     <SidebarGroup class="px-2 py-1">
         <SidebarGroupLabel
+            v-if="showLabel && !collapsible"
             class="text-[11px] font-semibold tracking-wide text-sidebar-foreground/40 uppercase"
         >
             {{ label }}
         </SidebarGroupLabel>
-        <SidebarMenu class="gap-0.5">
+        <SidebarMenu
+            v-if="collapsible"
+            class="group-data-[collapsible=icon]:hidden"
+        >
+            <SidebarMenuItem>
+                <SidebarMenuButton
+                    class="h-9 rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    :aria-expanded="open"
+                    @click="toggle"
+                >
+                    <component :is="icon" v-if="icon" />
+                    <span>{{ label }}</span>
+                    <ChevronRight
+                        :class="[
+                            'ml-auto size-4 text-sidebar-foreground/40 transition-transform duration-200',
+                            open ? 'rotate-90' : '',
+                        ]"
+                    />
+                </SidebarMenuButton>
+            </SidebarMenuItem>
+        </SidebarMenu>
+        <SidebarMenu
+            :class="[
+                'gap-0.5',
+                collapsible
+                    ? 'mt-0.5 ml-3.5 w-auto min-w-0 border-l border-sidebar-border pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0'
+                    : '',
+                collapsible && !open
+                    ? 'hidden group-data-[collapsible=icon]:flex'
+                    : '',
+            ]"
+        >
             <SidebarMenuItem v-for="item in items" :key="item.title">
                 <SidebarMenuButton
                     as-child

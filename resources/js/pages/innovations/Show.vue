@@ -7,18 +7,20 @@ import PageHeader from '@/components/common/PageHeader.vue';
 import Panel from '@/components/common/Panel.vue';
 import BomSection from '@/components/innovations/BomSection.vue';
 import MediaSection from '@/components/innovations/MediaSection.vue';
+import ProductionPanel from '@/components/innovations/ProductionPanel.vue';
 import TechnologySection from '@/components/innovations/TechnologySection.vue';
 import { statusTone } from '@/components/innovations/types';
 import type {
-    BomLine,
     DetailOptions,
+    Formula,
     InnovationFields,
     MediaEntry,
+    ProductionSummary,
     TechnologyLink,
 } from '@/components/innovations/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
 import innovations from '@/routes/innovations';
 import {
     index as innovationsIndexCrumb,
@@ -38,17 +40,24 @@ type InnovationDetail = InnovationFields & {
     updater: string | null;
     created_at: string | null;
     updated_at: string | null;
+    estimated_unit_cost: number | null;
+    suggested_selling_price: number | null;
 };
 
 const props = defineProps<{
     innovation: InnovationDetail;
-    items: BomLine[];
-    bomTotal: number;
-    bomHasUnpricedLines: boolean;
+    formulas: Formula[];
+    selectedFormulaId: number | null;
     technologies: TechnologyLink[];
     media: MediaEntry[];
+    production: ProductionSummary;
     options: DetailOptions | null;
-    can: { update: boolean; delete: boolean };
+    can: {
+        update: boolean;
+        delete: boolean;
+        createFormula: boolean;
+        createBuildOrder: boolean;
+    };
 }>();
 
 useBreadcrumbs(() => [
@@ -81,6 +90,10 @@ const story = computed(() =>
         { label: 'Solution', value: props.innovation.solution_description },
     ].filter((entry) => entry.value),
 );
+
+function money(value: number | null): string {
+    return value === null ? '—' : `₱${formatNumber(value)}`;
+}
 
 const archiveOpen = ref(false);
 const archiveProcessing = ref(false);
@@ -240,6 +253,28 @@ function archive(): void {
                     </div>
                     <div>
                         <dt class="label-mono text-muted-foreground">
+                            Est. unit cost
+                        </dt>
+                        <dd class="tabular-nums">
+                            {{ money(innovation.estimated_unit_cost) }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="label-mono text-muted-foreground">
+                            Suggested price
+                        </dt>
+                        <dd class="tabular-nums">
+                            {{ money(innovation.suggested_selling_price) }}
+                            <span
+                                v-if="innovation.markup_percentage !== null"
+                                class="text-muted-foreground"
+                                >({{ innovation.markup_percentage }}%
+                                markup)</span
+                            >
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="label-mono text-muted-foreground">
                             Created
                         </dt>
                         <dd>
@@ -270,11 +305,11 @@ function archive(): void {
             <div :class="technologiesFirst ? 'order-2' : 'order-1'">
                 <BomSection
                     :innovation-id="innovation.id"
-                    :items="items"
-                    :total="bomTotal"
-                    :has-unpriced-lines="bomHasUnpricedLines"
+                    :formulas="formulas"
+                    :selected-formula-id="selectedFormulaId"
                     :options="options"
                     :can-update="can.update"
+                    :can-create-formula="can.createFormula"
                     :hint="bomHint"
                 />
             </div>
@@ -288,6 +323,12 @@ function archive(): void {
                 />
             </div>
         </div>
+
+        <ProductionPanel
+            v-if="formulas.length || production.buildOrders.length"
+            :production="production"
+            :can-create-build-order="can.createBuildOrder"
+        />
 
         <MediaSection
             :innovation-id="innovation.id"

@@ -28,11 +28,11 @@ import { useFilters } from '@/composables/useFilters';
 import inventory from '@/routes/inventory';
 import itemCategories from '@/routes/inventory/categories';
 import { index as itemCategoriesIndexCrumb } from '@/routes/inventory/categories';
-import { index as itemsIndexCrumb } from '@/routes/inventory/items';
+import { index as setupCrumb } from '@/routes/inventory/locations';
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs';
 
 useBreadcrumbs([
-    { title: 'Inventory', href: itemsIndexCrumb() },
+    { title: 'Setup', href: setupCrumb() },
     { title: 'Item categories', href: itemCategoriesIndexCrumb() },
 ]);
 

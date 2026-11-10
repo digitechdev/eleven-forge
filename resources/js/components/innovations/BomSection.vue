@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Link, router, useForm } from '@inertiajs/vue3';
-import { Boxes, Pencil, Plus, Trash2 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Boxes, CircleCheck, Copy, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { computed, ref, watch } from 'vue';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import Field from '@/components/common/Field.vue';
@@ -11,26 +11,84 @@ import FormSection from '@/components/common/FormSection.vue';
 import Panel from '@/components/common/Panel.vue';
 import SelectInput from '@/components/common/SelectInput.vue';
 import TextareaInput from '@/components/common/TextareaInput.vue';
-import type { BomLine, DetailOptions } from '@/components/innovations/types';
+import InputError from '@/components/InputError.vue';
+import { formulaStatusTone } from '@/components/innovations/types';
+import type {
+    BomLine,
+    DetailOptions,
+    Formula,
+} from '@/components/innovations/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatNumber } from '@/lib/format';
+import { formatDate, formatNumber } from '@/lib/format';
+import formulaRoutes from '@/routes/innovations/formulas';
 import bom from '@/routes/innovations/items';
 
+/** The versioned bill of materials: a version picker plus the selected formula's lines. */
 const props = defineProps<{
     innovationId: number;
-    items: BomLine[];
-    total: number;
-    hasUnpricedLines: boolean;
+    formulas: Formula[];
+    selectedFormulaId: number | null;
     options: DetailOptions | null;
     canUpdate: boolean;
+    canCreateFormula: boolean;
     hint?: string | null;
 }>();
 
+const page = usePage();
+const formulaError = computed(
+    () => (page.props.errors as Record<string, string> | undefined)?.formula,
+);
+
+const selectedId = ref<number | null>(props.selectedFormulaId);
+
+watch(
+    () => props.selectedFormulaId,
+    (id) => (selectedId.value = id),
+);
+
+const formula = computed<Formula | null>(
+    () =>
+        props.formulas.find((f) => f.id === selectedId.value) ??
+        props.formulas[props.formulas.length - 1] ??
+        null,
+);
+
+const items = computed<BomLine[]>(() => formula.value?.items ?? []);
+
+/** Lines can change on an editable formula, or when there is no formula yet (the first line starts version 1). */
+const canEditLines = computed(() =>
+    formula.value ? formula.value.can.update : props.canUpdate,
+);
+
+const versionOptions = computed(() =>
+    [...props.formulas].reverse().map((f) => ({
+        value: f.id,
+        label: `Version ${f.version} · ${f.status_label}`,
+    })),
+);
+
+const readOnlyReason = computed(() => {
+    if (!formula.value || formula.value.can.update || !props.canUpdate) {
+        return null;
+    }
+
+    if (formula.value.status === 'ARCHIVED') {
+        return 'Archived versions are read-only. Start a new version to make changes.';
+    }
+
+    return 'Used by a build order, so its lines are locked. Start a new version to make changes.';
+});
+
+const activeFormula = computed(() =>
+    props.formulas.find((f) => f.status === 'ACTIVE'),
+);
+
 type BomForm = {
+    innovation_formula_id: number | null;
     inventory_item_id: number | null;
     unit_id: number | null;
     quantity_required: number | string;
@@ -41,13 +99,14 @@ type BomForm = {
 };
 
 const blank = (): BomForm => ({
+    innovation_formula_id: formula.value?.id ?? null,
     inventory_item_id: null,
     unit_id: null,
     quantity_required: 1,
     usage_description: null,
     specification_notes: null,
     is_optional: false,
-    sort_order: props.items.length,
+    sort_order: items.value.length,
 });
 
 const dialogOpen = ref(false);
@@ -59,10 +118,20 @@ const removing = ref<BomLine | null>(null);
 const removeOpen = ref(false);
 const removeProcessing = ref(false);
 
-/** Items not yet on the BOM (plus the line being edited), narrowed by the search box. */
+const formulaDialogOpen = ref(false);
+const formulaForm = useForm<{
+    yield_quantity: number | string;
+    notes: string | null;
+}>({ yield_quantity: 1, notes: null });
+
+const activateOpen = ref(false);
+const activateProcessing = ref(false);
+const versionProcessing = ref(false);
+
+/** Items not yet on the formula (plus the line being edited), narrowed by the search box. */
 const itemOptions = computed(() => {
     const used = new Set(
-        props.items
+        items.value
             .filter((line) => line.id !== editing.value?.id)
             .map((line) => line.inventory_item_id),
     );
@@ -85,6 +154,11 @@ const itemOptions = computed(() => {
 
 function money(value: number | null): string {
     return value === null ? '—' : `₱${formatNumber(value)}`;
+}
+
+function selectVersion(value: string | number | null | undefined): void {
+    selectedId.value =
+        value === null || value === undefined ? null : Number(value);
 }
 
 function selectItem(value: string | number | null | undefined): void {
@@ -111,6 +185,7 @@ function openEdit(line: BomLine): void {
     editing.value = line;
     itemSearch.value = '';
     form.defaults({
+        innovation_formula_id: formula.value?.id ?? null,
         inventory_item_id: line.inventory_item_id,
         unit_id: line.unit_id,
         quantity_required: line.quantity_required,
@@ -159,6 +234,65 @@ function remove(): void {
         },
     });
 }
+
+function newVersion(): void {
+    router.post(
+        formulaRoutes.store(props.innovationId).url,
+        { source_formula_id: formula.value?.id ?? null },
+        {
+            preserveScroll: true,
+            onStart: () => (versionProcessing.value = true),
+            onFinish: () => (versionProcessing.value = false),
+        },
+    );
+}
+
+function openFormulaEdit(): void {
+    if (!formula.value) {
+        return;
+    }
+
+    formulaForm.defaults({
+        yield_quantity: formula.value.yield_quantity,
+        notes: formula.value.notes,
+    });
+    formulaForm.reset();
+    formulaForm.clearErrors();
+    formulaDialogOpen.value = true;
+}
+
+function submitFormula(): void {
+    if (!formula.value) {
+        return;
+    }
+
+    formulaForm.put(
+        formulaRoutes.update([props.innovationId, formula.value.id]).url,
+        {
+            preserveScroll: true,
+            onSuccess: () => (formulaDialogOpen.value = false),
+        },
+    );
+}
+
+function activate(): void {
+    if (!formula.value) {
+        return;
+    }
+
+    router.patch(
+        formulaRoutes.activate([props.innovationId, formula.value.id]).url,
+        {},
+        {
+            preserveScroll: true,
+            onStart: () => (activateProcessing.value = true),
+            onFinish: () => {
+                activateProcessing.value = false;
+                activateOpen.value = false;
+            },
+        },
+    );
+}
 </script>
 
 <template>
@@ -168,9 +302,83 @@ function remove(): void {
         :description="hint ?? 'Physical inventory items this innovation uses.'"
         flush
     >
-        <template v-if="canUpdate" #actions>
-            <Button size="sm" @click="openCreate"><Plus /> Add item</Button>
+        <template v-if="formulas.length || canEditLines" #actions>
+            <SelectInput
+                v-if="formulas.length > 1"
+                :model-value="formula?.id"
+                class="w-48"
+                :options="versionOptions"
+                aria-label="Formula version"
+                @update:model-value="selectVersion"
+            />
+            <Button
+                v-if="formula?.can.activate"
+                size="sm"
+                variant="outline"
+                @click="activateOpen = true"
+                ><CircleCheck /> Activate</Button
+            >
+            <Button
+                v-if="formula && canCreateFormula"
+                size="sm"
+                variant="outline"
+                :disabled="versionProcessing"
+                @click="newVersion"
+                ><Copy /> New version</Button
+            >
+            <Button
+                v-if="formula?.can.update"
+                size="sm"
+                variant="outline"
+                @click="openFormulaEdit"
+                ><Pencil /> Edit formula</Button
+            >
+            <Button v-if="canEditLines" size="sm" @click="openCreate"
+                ><Plus /> Add item</Button
+            >
         </template>
+
+        <div
+            v-if="formula"
+            class="flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-5 py-3 text-sm"
+        >
+            <div class="flex items-center gap-2">
+                <span class="font-medium">Version {{ formula.version }}</span>
+                <Badge
+                    variant="outline"
+                    :class="formulaStatusTone[formula.status]"
+                    >{{ formula.status_label }}</Badge
+                >
+            </div>
+            <div>
+                <span class="label-mono text-muted-foreground">Yield </span>
+                <span class="tabular-nums">{{
+                    formatNumber(formula.yield_quantity, 3)
+                }}</span>
+            </div>
+            <div>
+                <span class="label-mono text-muted-foreground"
+                    >Est. unit cost
+                </span>
+                <span class="font-medium tabular-nums">{{
+                    money(formula.estimated_unit_cost)
+                }}</span>
+            </div>
+            <div v-if="formula.activated_at">
+                <span class="label-mono text-muted-foreground">Activated </span>
+                <span>{{ formatDate(formula.activated_at) }}</span>
+            </div>
+            <p v-if="formula.notes" class="text-muted-foreground">
+                {{ formula.notes }}
+            </p>
+            <p
+                v-if="readOnlyReason"
+                class="basis-full text-xs text-muted-foreground"
+            >
+                {{ readOnlyReason }}
+            </p>
+            <InputError class="basis-full" :message="formulaError" />
+        </div>
 
         <div v-if="items.length" class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -185,7 +393,7 @@ function remove(): void {
                         <th class="px-5 py-2.5 text-right font-medium">
                             Est. cost
                         </th>
-                        <th v-if="canUpdate" class="px-5 py-2.5">
+                        <th v-if="canEditLines" class="px-5 py-2.5">
                             <span class="sr-only">Actions</span>
                         </th>
                     </tr>
@@ -252,7 +460,7 @@ function remove(): void {
                         >
                             {{ money(line.estimated_cost) }}
                         </td>
-                        <td v-if="canUpdate" class="px-5 py-3">
+                        <td v-if="canEditLines" class="px-5 py-3">
                             <div class="flex justify-end gap-1">
                                 <Button
                                     size="icon"
@@ -280,14 +488,16 @@ function remove(): void {
                             colspan="4"
                             class="px-5 py-3 text-right label-mono text-muted-foreground"
                         >
-                            Estimated total<span v-if="hasUnpricedLines">
+                            Estimated total<span
+                                v-if="formula?.has_unpriced_lines"
+                            >
                                 (excludes unpriced items)</span
                             >
                         </td>
                         <td class="px-5 py-3 text-right font-bold tabular-nums">
-                            {{ money(total) }}
+                            {{ money(formula?.total ?? 0) }}
                         </td>
-                        <td v-if="canUpdate" />
+                        <td v-if="canEditLines" />
                     </tr>
                 </tfoot>
             </table>
@@ -296,12 +506,16 @@ function remove(): void {
             v-else
             :icon="Boxes"
             title="No items yet"
-            description="Add the physical parts and materials this innovation needs."
+            :description="
+                formula
+                    ? 'This version has no lines yet.'
+                    : 'Add the physical parts and materials this innovation needs.'
+            "
         />
     </Panel>
 
     <FormDialog
-        v-if="canUpdate && options"
+        v-if="canEditLines && options"
         v-model:open="dialogOpen"
         :title="editing ? `Edit ${editing.item_name}` : 'Add BOM item'"
         :icon="Boxes"
@@ -413,5 +627,64 @@ function remove(): void {
         confirm-label="Remove"
         :processing="removeProcessing"
         @confirm="remove"
+    />
+
+    <FormDialog
+        v-if="formula?.can.update"
+        v-model:open="formulaDialogOpen"
+        :title="`Edit version ${formula.version}`"
+        :icon="Boxes"
+        size="md"
+    >
+        <form @submit.prevent="submitFormula">
+            <FormSection>
+                <Field
+                    label="Yield quantity"
+                    for="formula-yield"
+                    :error="formulaForm.errors.yield_quantity"
+                    hint="Units built from one set of these lines."
+                    required
+                >
+                    <Input
+                        id="formula-yield"
+                        v-model="formulaForm.yield_quantity"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                    />
+                </Field>
+                <Field
+                    label="Notes"
+                    for="formula-notes"
+                    :error="formulaForm.errors.notes"
+                    class="sm:col-span-2"
+                >
+                    <TextareaInput
+                        id="formula-notes"
+                        v-model="formulaForm.notes"
+                        placeholder="What changed in this version"
+                    />
+                </Field>
+            </FormSection>
+            <FormFooter
+                submit-label="Save formula"
+                :processing="formulaForm.processing"
+                @cancel="formulaDialogOpen = false"
+            />
+        </form>
+    </FormDialog>
+
+    <ConfirmDialog
+        v-model:open="activateOpen"
+        :title="`Activate version ${formula?.version ?? ''}?`"
+        :description="
+            activeFormula
+                ? `New build orders will use this version. Version ${activeFormula.version} is archived and becomes read-only.`
+                : 'New build orders will use this version.'
+        "
+        confirm-label="Activate"
+        :destructive="false"
+        :processing="activateProcessing"
+        @confirm="activate"
     />
 </template>

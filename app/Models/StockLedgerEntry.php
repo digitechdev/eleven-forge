@@ -81,6 +81,18 @@ class StockLedgerEntry extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** @return BelongsTo<ProductionRun, $this> */
+    public function productionRun(): BelongsTo
+    {
+        return $this->belongsTo(ProductionRun::class);
+    }
+
+    /** @return BelongsTo<BuildOrder, $this> */
+    public function buildOrder(): BelongsTo
+    {
+        return $this->belongsTo(BuildOrder::class);
+    }
+
     /** @return BelongsTo<self, $this> */
     public function reversalOf(): BelongsTo
     {

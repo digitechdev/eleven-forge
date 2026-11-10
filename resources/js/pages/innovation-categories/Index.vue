@@ -23,9 +23,11 @@ import innovationCategories from '@/routes/innovation-categories';
 import innovations from '@/routes/innovations';
 import type { Paginated } from '@/types';
 import { index as innovationCategoriesIndexCrumb } from '@/routes/innovation-categories';
+import { index as setupCrumb } from '@/routes/inventory/locations';
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs';
 
 useBreadcrumbs([
+    { title: 'Setup', href: setupCrumb() },
     { title: 'Innovation categories', href: innovationCategoriesIndexCrumb() },
 ]);
 

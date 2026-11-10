@@ -240,6 +240,30 @@ function submit(): void {
             </FormSection>
         </Panel>
 
+        <Panel
+            title="Costing"
+            description="Internal only — never shown on the public showcase."
+        >
+            <FormSection>
+                <Field
+                    label="Markup (%)"
+                    for="innovation-markup"
+                    :error="form.errors.markup_percentage"
+                    hint="Added to the estimated unit cost to suggest a selling price."
+                >
+                    <Input
+                        id="innovation-markup"
+                        v-model="form.markup_percentage"
+                        type="number"
+                        min="0"
+                        max="999.99"
+                        step="0.01"
+                        placeholder="e.g. 30"
+                    />
+                </Field>
+            </FormSection>
+        </Panel>
+
         <div class="flex justify-end gap-2">
             <Button variant="ghost" as-child>
                 <Link :href="cancelHref">Cancel</Link>

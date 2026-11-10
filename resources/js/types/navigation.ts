@@ -15,6 +15,8 @@ export type NavItem = {
     badge?: number;
     /** Only highlight on an exact URL match (otherwise child pages also match). */
     exact?: boolean;
+    /** Other pages that belong to this entry, e.g. Permissions under "Roles & permissions". */
+    alsoActiveOn?: NonNullable<InertiaLinkProps['href']>[];
     /** Run an action (e.g. open a modal) instead of navigating. */
     action?: () => void;
 };
@@ -22,4 +24,9 @@ export type NavItem = {
 export type NavGroup = {
     label: string;
     items: NavItem[];
+    /** Show the label as a heading; off for the main list, which needs none. */
+    showLabel?: boolean;
+    /** Fold the group behind a menu-style toggle with this icon. */
+    collapsible?: boolean;
+    icon?: LucideIcon;
 };

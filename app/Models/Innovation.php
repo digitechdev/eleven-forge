@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FormulaStatus;
 use App\Enums\InnovationStatus;
 use App\Enums\InnovationType;
 use App\Enums\InnovationVisibility;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -36,13 +38,16 @@ use Illuminate\Support\Str;
  * @property InnovationVisibility $visibility
  * @property Carbon|null $developed_at
  * @property bool $is_featured
+ * @property string|null $markup_percentage
+ * @property string|null $estimated_unit_cost
+ * @property string|null $suggested_selling_price
  * @property int|null $created_by
  * @property int|null $updated_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-#[Fillable(['innovation_code', 'category_id', 'name', 'slug', 'type', 'tagline', 'short_description', 'description', 'problem_statement', 'solution_description', 'key_features', 'benefits', 'status', 'visibility', 'developed_at', 'is_featured', 'created_by', 'updated_by'])]
+#[Fillable(['innovation_code', 'category_id', 'name', 'slug', 'type', 'tagline', 'short_description', 'description', 'problem_statement', 'solution_description', 'key_features', 'benefits', 'status', 'visibility', 'developed_at', 'is_featured', 'markup_percentage', 'estimated_unit_cost', 'suggested_selling_price', 'created_by', 'updated_by'])]
 class Innovation extends Model
 {
     /** @use HasFactory<InnovationFactory> */
@@ -50,7 +55,7 @@ class Innovation extends Model
 
     protected function casts(): array
     {
-        return ['type' => InnovationType::class, 'status' => InnovationStatus::class, 'visibility' => InnovationVisibility::class, 'key_features' => 'array', 'benefits' => 'array', 'developed_at' => 'date', 'is_featured' => 'boolean'];
+        return ['type' => InnovationType::class, 'status' => InnovationStatus::class, 'visibility' => InnovationVisibility::class, 'key_features' => 'array', 'benefits' => 'array', 'developed_at' => 'date', 'is_featured' => 'boolean', 'markup_percentage' => 'decimal:2', 'estimated_unit_cost' => 'decimal:2', 'suggested_selling_price' => 'decimal:2'];
     }
 
     /** @return BelongsTo<InnovationCategory, $this> */
@@ -81,6 +86,30 @@ class Innovation extends Model
     public function innovationItems(): HasMany
     {
         return $this->hasMany(InnovationItem::class);
+    }
+
+    /** @return HasMany<InnovationFormula, $this> */
+    public function formulas(): HasMany
+    {
+        return $this->hasMany(InnovationFormula::class);
+    }
+
+    /** @return HasOne<InnovationFormula, $this> */
+    public function activeFormula(): HasOne
+    {
+        return $this->hasOne(InnovationFormula::class)->where('status', FormulaStatus::Active);
+    }
+
+    /** @return HasMany<BuildOrder, $this> */
+    public function buildOrders(): HasMany
+    {
+        return $this->hasMany(BuildOrder::class);
+    }
+
+    /** @return HasMany<ProductionRun, $this> */
+    public function productionRuns(): HasMany
+    {
+        return $this->hasMany(ProductionRun::class);
     }
 
     /** @return HasMany<InnovationTechnology, $this> */

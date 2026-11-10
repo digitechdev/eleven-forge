@@ -28,6 +28,7 @@ export type InnovationFields = {
     visibility: string;
     developed_at: string | null;
     is_featured: boolean;
+    markup_percentage: number | string | null;
 };
 
 export type BomLine = {
@@ -45,6 +46,47 @@ export type BomLine = {
     specification_notes: string | null;
     is_optional: boolean;
     sort_order: number;
+};
+
+/** One version of the bill of materials. */
+export type Formula = {
+    id: number;
+    version: number;
+    status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+    status_label: string;
+    yield_quantity: number;
+    notes: string | null;
+    activated_at: string | null;
+    estimated_unit_cost: number | null;
+    is_used: boolean;
+    items: BomLine[];
+    total: number;
+    has_unpriced_lines: boolean;
+    can: { update: boolean; activate: boolean };
+};
+
+/** The innovation's latest build orders and production runs. */
+export type ProductionSummary = {
+    buildOrders: {
+        id: number;
+        order_number: string;
+        status: string;
+        status_label: string;
+        formula_version: number | null;
+        planned_quantity: number;
+        produced_quantity: number;
+        progress: number;
+    }[];
+    runs: {
+        id: number;
+        run_number: string;
+        output_quantity: number;
+        unit_production_cost: number;
+        completed_at: string;
+        url: string;
+    }[];
+    buildOrdersUrl: string;
+    newBuildOrderUrl: string;
 };
 
 export type TechnologyLink = {
@@ -91,4 +133,11 @@ export const statusTone: Record<string, string> = {
     COMPLETED: 'border-transparent bg-chart-5/12 text-chart-5',
     DEPLOYED: 'border-transparent bg-chart-1/12 text-chart-1',
     RETIRED: 'border-transparent bg-muted text-muted-foreground line-through',
+};
+
+/** Badge classes for each formula status. */
+export const formulaStatusTone: Record<string, string> = {
+    DRAFT: 'border-transparent bg-muted text-muted-foreground',
+    ACTIVE: 'border-transparent bg-chart-5/12 text-chart-5',
+    ARCHIVED: 'border-transparent bg-muted text-muted-foreground line-through',
 };

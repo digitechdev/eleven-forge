@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Catalog;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\InnovationCategoryRequest;
 use App\Models\InnovationCategory;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -32,7 +33,7 @@ class InnovationCategoryController extends Controller
                 ->when(($filters['status'] ?? null) === 'inactive', fn ($query) => $query->where('is_active', false))
                 ->orderBy('sort_order')
                 ->orderBy('name')
-                ->paginate(20)
+                ->paginate(PerPage::fromRequest($request))
                 ->withQueryString()
                 ->through(fn (InnovationCategory $category): array => [
                     'id' => $category->id,

@@ -157,3 +157,30 @@ test('deactivating keeps the user and their innovations, and can be reversed', f
 
     expect($user->fresh()->status)->toBe(UserStatus::Active);
 });
+
+test('admins can issue a temporary password that replaces the old one and is shown once', function () {
+    $admin = User::factory()->admin()->create();
+    $user = User::factory()->viewer()->create(['password' => 'old-password']);
+
+    $this->actingAs($admin)
+        ->post(route('administration.users.temporary-password', $user))
+        ->assertRedirect()
+        ->assertInertiaFlash('temporaryPassword.userName', $user->name);
+
+    $issued = session('inertia.flash_data.temporaryPassword.password');
+    $user->refresh();
+
+    expect($issued)->toBeString()->toMatch('/^EF-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-\d{4}$/')
+        ->and(Hash::check($issued, $user->password))->toBeTrue()
+        ->and(Hash::check('old-password', $user->password))->toBeFalse();
+});
+
+test('temporary passwords cannot be issued to yourself, to a super admin by an admin, or by a viewer', function () {
+    $admin = User::factory()->admin()->create();
+    $superAdmin = User::factory()->superAdmin()->create();
+    $viewer = User::factory()->viewer()->create();
+
+    $this->actingAs($admin)->post(route('administration.users.temporary-password', $admin))->assertForbidden();
+    $this->actingAs($admin)->post(route('administration.users.temporary-password', $superAdmin))->assertForbidden();
+    $this->actingAs($viewer)->post(route('administration.users.temporary-password', $admin))->assertForbidden();
+});

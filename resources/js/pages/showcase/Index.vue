@@ -81,7 +81,10 @@ const { filters } = useFilters(
             v-if="props.innovations.last_page > 1"
             class="overflow-hidden rounded-sm border"
         >
-            <Pagination :paginator="props.innovations" />
+            <Pagination
+                :paginator="props.innovations"
+                :per-page-selector="false"
+            />
         </div>
     </div>
 </template>

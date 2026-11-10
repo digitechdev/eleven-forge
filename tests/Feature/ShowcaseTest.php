@@ -87,3 +87,31 @@ test('internal and archived innovations are not found on the showcase', function
     $this->get(route('showcase.show', $internal->slug))->assertNotFound();
     $this->get(route('showcase.show', $archived->slug))->assertNotFound();
 });
+
+test('the showcase never exposes internal costing', function () {
+    $innovation = Innovation::factory()->create([
+        'visibility' => InnovationVisibility::Public,
+        'markup_percentage' => 30,
+        'estimated_unit_cost' => 1234.56,
+        'suggested_selling_price' => 1604.93,
+    ]);
+
+    $this->get(route('showcase.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('innovations.data', 1)
+            ->missing('innovations.data.0.markup_percentage')
+            ->missing('innovations.data.0.estimated_unit_cost')
+            ->missing('innovations.data.0.suggested_selling_price'))
+        ->assertDontSee('1234.56')
+        ->assertDontSee('1604.93');
+
+    $this->get(route('showcase.show', $innovation->slug))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->missing('innovation.markup_percentage')
+            ->missing('innovation.estimated_unit_cost')
+            ->missing('innovation.suggested_selling_price'))
+        ->assertDontSee('1234.56')
+        ->assertDontSee('1604.93');
+});

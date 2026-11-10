@@ -33,6 +33,7 @@ class UnitRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:100', Rule::unique(Unit::class)->ignore($unit)],
             'symbol' => ['required', 'string', 'max:20', Rule::unique(Unit::class)->ignore($unit)],
+            'decimal_places' => ['required', 'integer', 'min:0', 'max:3'],
             'is_active' => ['required', 'boolean'],
         ];
     }

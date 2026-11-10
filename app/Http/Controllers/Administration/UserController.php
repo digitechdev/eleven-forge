@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Administration\StoreUserRequest;
 use App\Http\Requests\Administration\UpdateUserRequest;
 use App\Models\User;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +39,7 @@ class UserController extends Controller
                 ->when($filters['role'] ?? null, fn ($query, string $role) => $query->whereHas('roles', fn ($query) => $query->where('name', $role)))
                 ->when(UserStatus::tryFrom((string) ($filters['status'] ?? '')), fn ($query, UserStatus $status) => $query->where('status', $status))
                 ->orderBy('name')
-                ->paginate(20)
+                ->paginate(PerPage::fromRequest($request))
                 ->withQueryString()
                 ->through(function (User $user) use ($actor, $actorIsSuperAdmin): array {
                     $roleName = $user->getRoleNames()->first();
@@ -59,6 +60,7 @@ class UserController extends Controller
                         'can' => [
                             'update' => $isEditable,
                             'toggleStatus' => $isEditable && ! $isSelf,
+                            'resetPassword' => $isEditable && ! $isSelf,
                         ],
                     ];
                 }),
@@ -147,6 +149,29 @@ class UserController extends Controller
             'type' => 'success',
             'message' => $user->isActive() ? __('User activated.') : __('User deactivated.'),
         ]);
+
+        return back();
+    }
+
+    /**
+     * Replace a user's password with a one-time temporary password and show it to the admin once.
+     * Admins change their own password from their profile settings instead.
+     */
+    public function temporaryPassword(Request $request, User $user): RedirectResponse
+    {
+        Gate::authorize('update', $user);
+
+        abort_if($user->is($request->user()), 403);
+        abort_if(
+            $user->hasRole(UserRole::SuperAdmin->value) && ! $request->user()->hasRole(UserRole::SuperAdmin->value),
+            403,
+        );
+
+        $temporaryPassword = sprintf('EF-%s-%s-%d', Str::upper(Str::random(4)), Str::upper(Str::random(4)), random_int(1000, 9999));
+
+        $user->forceFill(['password' => $temporaryPassword])->save();
+
+        Inertia::flash('temporaryPassword', ['userName' => $user->name, 'password' => $temporaryPassword]);
 
         return back();
     }

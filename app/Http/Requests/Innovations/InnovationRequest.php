@@ -74,6 +74,7 @@ class InnovationRequest extends FormRequest
             'visibility' => ['required', Rule::enum(InnovationVisibility::class)],
             'developed_at' => ['nullable', 'date'],
             'is_featured' => ['required', 'boolean'],
+            'markup_percentage' => ['nullable', 'numeric', 'min:0', 'max:999.99', 'decimal:0,2'],
         ];
     }
 
@@ -87,6 +88,7 @@ class InnovationRequest extends FormRequest
         return [
             'innovation_code.unique' => __('This code is already used by another innovation (archived innovations included).'),
             'slug.unique' => __('This slug is already used by another innovation (archived innovations included).'),
+            'markup_percentage.max' => __('Markup may not be more than 999.99%.'),
         ];
     }
 }

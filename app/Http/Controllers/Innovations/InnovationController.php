@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Innovations;
 
+use App\Enums\FormulaStatus;
 use App\Enums\InnovationMediaType;
 use App\Enums\InnovationStatus;
 use App\Enums\InnovationType;
@@ -10,14 +11,20 @@ use App\Enums\InventoryItemStatus;
 use App\Enums\TechnologyStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Innovations\InnovationRequest;
+use App\Models\BuildOrder;
 use App\Models\Innovation;
 use App\Models\InnovationCategory;
+use App\Models\InnovationFormula;
 use App\Models\InnovationItem;
 use App\Models\InnovationMedia;
 use App\Models\InnovationTechnology;
 use App\Models\InventoryItem;
+use App\Models\ProductionRun;
 use App\Models\Technology;
 use App\Models\Unit;
+use App\Models\User;
+use App\Services\InnovationFormulaService;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +59,7 @@ class InnovationController extends Controller
                 ->when(InnovationVisibility::tryFrom($filters['visibility'] ?? ''), fn (Builder $query, InnovationVisibility $visibility) => $query->where('visibility', $visibility))
                 ->latest('updated_at')
                 ->orderBy('id')
-                ->paginate(20)
+                ->paginate(PerPage::fromRequest($request))
                 ->withQueryString()
                 ->through(fn (Innovation $innovation): array => [
                     'id' => $innovation->id,
@@ -119,7 +126,7 @@ class InnovationController extends Controller
     }
 
     /**
-     * Show an innovation with its bill of materials, technologies, and media.
+     * Show an innovation with its formula versions, technologies, media, and production activity.
      */
     public function show(Request $request, Innovation $innovation): Response
     {
@@ -129,36 +136,20 @@ class InnovationController extends Controller
             'category:id,name',
             'creator:id,name',
             'updater:id,name',
-            'innovationItems' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
-            'innovationItems.inventoryItem' => fn ($query) => $query->withTrashed(),
-            'innovationItems.unit',
+            'formulas' => fn ($query) => $query->withExists('buildOrders')->orderBy('version'),
+            'formulas.items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
+            'formulas.items.inventoryItem' => fn ($query) => $query->withTrashed(),
+            'formulas.items.unit',
             'innovationTechnologies.technology',
             'media' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
         ]);
 
-        $canUpdate = $request->user()->can('update', $innovation);
+        $innovation->formulas->each->setRelation('innovation', $innovation);
 
-        $items = $innovation->innovationItems->map(function (InnovationItem $line): array {
-            $unitCost = $line->inventoryItem?->unit_cost !== null ? (float) $line->inventoryItem->unit_cost : null;
-            $quantity = (float) $line->quantity_required;
-
-            return [
-                'id' => $line->id,
-                'inventory_item_id' => $line->inventory_item_id,
-                'item_code' => $line->inventoryItem?->item_code,
-                'item_name' => $line->inventoryItem?->name,
-                'item_url' => $line->inventoryItem ? route('inventory.items.show', $line->inventoryItem) : null,
-                'unit_id' => $line->unit_id,
-                'unit_symbol' => $line->unit?->symbol,
-                'quantity_required' => $quantity,
-                'unit_cost' => $unitCost,
-                'estimated_cost' => $unitCost !== null ? round($quantity * $unitCost, 2) : null,
-                'usage_description' => $line->usage_description,
-                'specification_notes' => $line->specification_notes,
-                'is_optional' => $line->is_optional,
-                'sort_order' => $line->sort_order,
-            ];
-        });
+        $user = $request->user();
+        $canUpdate = $user->can('update', $innovation);
+        $formulas = $innovation->formulas->map(fn (InnovationFormula $formula): array => $this->presentFormula($formula, $user));
+        $requestedFormulaId = $request->integer('formula');
 
         return Inertia::render('innovations/Show', [
             'innovation' => [
@@ -171,10 +162,13 @@ class InnovationController extends Controller
                 'updater' => $innovation->updater?->name,
                 'created_at' => $innovation->created_at?->toIso8601String(),
                 'updated_at' => $innovation->updated_at?->toIso8601String(),
+                'estimated_unit_cost' => $innovation->estimated_unit_cost !== null ? (float) $innovation->estimated_unit_cost : null,
+                'suggested_selling_price' => $innovation->suggested_selling_price !== null ? (float) $innovation->suggested_selling_price : null,
             ],
-            'items' => $items,
-            'bomTotal' => round($items->sum(fn (array $line): float => $line['estimated_cost'] ?? 0), 2),
-            'bomHasUnpricedLines' => $items->contains(fn (array $line): bool => $line['estimated_cost'] === null),
+            'formulas' => $formulas,
+            'selectedFormulaId' => ($formulas->firstWhere('id', $requestedFormulaId)
+                ?? $formulas->firstWhere('status', FormulaStatus::Active->value)
+                ?? $formulas->last())['id'] ?? null,
             'technologies' => $innovation->innovationTechnologies
                 ->sortBy(fn (InnovationTechnology $link): string => strtolower($link->technology->name))
                 ->values()
@@ -198,10 +192,14 @@ class InnovationController extends Controller
                 'is_public' => $media->is_public,
                 'sort_order' => $media->sort_order,
             ]),
+            'production' => $this->production($innovation),
             'options' => $canUpdate ? $this->detailOptions($innovation) : null,
             'can' => [
                 'update' => $canUpdate,
-                'delete' => $request->user()->can('delete', $innovation),
+                'delete' => $user->can('delete', $innovation),
+                'createFormula' => $user->can('create', [InnovationFormula::class, $innovation]),
+                'createBuildOrder' => $user->can('create', BuildOrder::class)
+                    && $innovation->formulas->contains('status', FormulaStatus::Active),
             ],
         ]);
     }
@@ -230,6 +228,7 @@ class InnovationController extends Controller
             ...$data,
             'innovation_code' => filled($data['innovation_code'] ?? null) ? $data['innovation_code'] : $innovation->innovation_code,
             'slug' => filled($data['slug'] ?? null) ? $data['slug'] : Innovation::uniqueSlug($data['name'], $innovation->id),
+            'suggested_selling_price' => InnovationFormulaService::suggestedSellingPrice($innovation->estimated_unit_cost, $data['markup_percentage'] ?? null),
             'updated_by' => $request->user()->id,
         ]);
 
@@ -293,6 +292,7 @@ class InnovationController extends Controller
             'visibility' => $innovation->visibility->value,
             'developed_at' => $innovation->developed_at?->toDateString(),
             'is_featured' => $innovation->is_featured,
+            'markup_percentage' => $innovation->markup_percentage !== null ? (float) $innovation->markup_percentage : null,
         ];
     }
 
@@ -318,14 +318,113 @@ class InnovationController extends Controller
     }
 
     /**
+     * One formula version with its lines and what the user may do with it.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentFormula(InnovationFormula $formula, User $user): array
+    {
+        $lines = $formula->items->map(function (InnovationItem $line): array {
+            $unitCost = $line->inventoryItem?->unit_cost !== null ? (float) $line->inventoryItem->unit_cost : null;
+            $quantity = (float) $line->quantity_required;
+
+            return [
+                'id' => $line->id,
+                'inventory_item_id' => $line->inventory_item_id,
+                'item_code' => $line->inventoryItem?->item_code,
+                'item_name' => $line->inventoryItem?->name,
+                'item_url' => $line->inventoryItem ? route('inventory.items.show', $line->inventoryItem) : null,
+                'unit_id' => $line->unit_id,
+                'unit_symbol' => $line->unit?->symbol,
+                'quantity_required' => $quantity,
+                'unit_cost' => $unitCost,
+                'estimated_cost' => $unitCost !== null ? round($quantity * $unitCost, 2) : null,
+                'usage_description' => $line->usage_description,
+                'specification_notes' => $line->specification_notes,
+                'is_optional' => $line->is_optional,
+                'sort_order' => $line->sort_order,
+            ];
+        });
+
+        $yield = (float) $formula->yield_quantity;
+        $requiredCost = $lines->where('is_optional', false)->sum(fn (array $line): float => $line['estimated_cost'] ?? 0);
+
+        return [
+            'id' => $formula->id,
+            'version' => $formula->version,
+            'status' => $formula->status->value,
+            'status_label' => $formula->status->label(),
+            'yield_quantity' => $yield,
+            'notes' => $formula->notes,
+            'activated_at' => $formula->activated_at?->toIso8601String(),
+            'estimated_unit_cost' => $formula->status !== FormulaStatus::Draft && $formula->estimated_unit_cost !== null
+                ? (float) $formula->estimated_unit_cost
+                : ($yield > 0 ? round($requiredCost / $yield, 2) : null),
+            'is_used' => $formula->isUsed(),
+            'items' => $lines,
+            'total' => round($lines->sum(fn (array $line): float => $line['estimated_cost'] ?? 0), 2),
+            'has_unpriced_lines' => $lines->contains(fn (array $line): bool => $line['estimated_cost'] === null),
+            'can' => [
+                'update' => $user->can('update', $formula),
+                'activate' => $user->can('activate', $formula),
+            ],
+        ];
+    }
+
+    /**
+     * The innovation's latest build orders and production runs, for the Production panel.
+     *
+     * @return array{buildOrders: array<int, array<string, mixed>>, runs: array<int, array<string, mixed>>, buildOrdersUrl: string, newBuildOrderUrl: string}
+     */
+    private function production(Innovation $innovation): array
+    {
+        return [
+            'buildOrders' => $innovation->buildOrders()
+                ->with('formula:id,version')
+                ->latest()
+                ->orderByDesc('id')
+                ->limit(5)
+                ->get()
+                ->map(fn (BuildOrder $order): array => [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'status' => $order->status->value,
+                    'status_label' => $order->status->label(),
+                    'formula_version' => $order->formula?->version,
+                    'planned_quantity' => (float) $order->planned_quantity,
+                    'produced_quantity' => (float) $order->produced_quantity,
+                    'progress' => $order->progressPercentage(),
+                ])
+                ->all(),
+            'runs' => $innovation->productionRuns()
+                ->latest('completed_at')
+                ->orderByDesc('id')
+                ->limit(5)
+                ->get()
+                ->map(fn (ProductionRun $run): array => [
+                    'id' => $run->id,
+                    'run_number' => $run->run_number,
+                    'output_quantity' => (float) $run->output_quantity,
+                    'unit_production_cost' => (float) $run->unit_production_cost,
+                    'completed_at' => $run->completed_at->toIso8601String(),
+                    'url' => route('production.runs.show', $run),
+                ])
+                ->all(),
+            'buildOrdersUrl' => route('production.build-orders.index', ['innovation' => $innovation->id]),
+            'newBuildOrderUrl' => route('production.build-orders.index', ['innovation' => $innovation->id, 'create' => 1]),
+        ];
+    }
+
+    /**
      * Select options for the BOM, technology, and media editors: active records plus those already linked.
      *
      * @return array{inventoryItems: array<int, array{value: int, label: string, item_code: string, default_unit_id: int, unit_cost: float|null}>, units: array<int, array{value: int, label: string}>, technologies: array<int, array{value: int, label: string}>, mediaTypes: array<int, array{value: string, label: string}>}
      */
     private function detailOptions(Innovation $innovation): array
     {
-        $linkedItemIds = $innovation->innovationItems->pluck('inventory_item_id');
-        $linkedUnitIds = $innovation->innovationItems->pluck('unit_id');
+        $lines = $innovation->formulas->flatMap->items;
+        $linkedItemIds = $lines->pluck('inventory_item_id')->unique()->values();
+        $linkedUnitIds = $lines->pluck('unit_id')->unique()->values();
         $linkedTechnologyIds = $innovation->innovationTechnologies->pluck('technology_id');
 
         return [

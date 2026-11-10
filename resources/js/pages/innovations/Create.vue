@@ -40,6 +40,7 @@ const initial: InnovationFields = {
     visibility: 'INTERNAL',
     developed_at: null,
     is_featured: false,
+    markup_percentage: null,
 };
 </script>
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
-    Boxes,
     CircleAlert,
+    CircleOff,
     Package,
     Pencil,
     Plus,
@@ -25,9 +25,7 @@ import StatCard from '@/components/common/StatCard.vue';
 import TextareaInput from '@/components/common/TextareaInput.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useFilters } from '@/composables/useFilters';
 import { formatNumber } from '@/lib/format';
 import items from '@/routes/inventory/items';
@@ -58,10 +56,16 @@ type Item = {
     specification: string | null;
     quantity_on_hand: number;
     minimum_stock: number;
+    reorder_level: number;
     unit_cost: number | null;
     status: string;
     status_label: string;
-    is_low_stock: boolean;
+    on_hand: number;
+    available: number;
+    stock_status: string;
+    stock_status_label: string;
+    stock_value: number;
+    ledger_url: string | null;
 };
 
 type Option = { value: string; label: string };
@@ -69,18 +73,23 @@ type RecordOption = { value: number; label: string; is_active: boolean };
 
 const props = defineProps<{
     items: Paginated<Item>;
-    stats: { total: number; low_stock: number; stock_value: number };
+    stats: { stock_value: number; low_stock: number; out_of_stock: number };
     filters: {
         search?: string;
         category?: string;
         type?: string;
-        status?: string;
+        item_status?: string;
         stock?: string;
+        location?: string;
     };
     categories: RecordOption[];
     units: RecordOption[];
     types: Option[];
     statuses: Option[];
+    stockStatuses: Option[];
+    locations: { value: number; label: string }[];
+    filterLocations: { value: number; label: string }[];
+    defaultLocationId: number | null;
     can: { manage: boolean };
 }>();
 
@@ -91,22 +100,22 @@ const { filters } = useFilters(
             ? Number(props.filters.category)
             : null,
         type: props.filters.type ?? null,
-        status: props.filters.status ?? null,
+        item_status: props.filters.item_status ?? null,
         stock: props.filters.stock ?? null,
+        location: props.filters.location
+            ? Number(props.filters.location)
+            : null,
     },
     () => items.index().url,
 );
 
-const lowStockOnly = computed({
-    get: () => filters.stock === 'low',
-    set: (value: boolean | 'indeterminate') =>
-        (filters.stock = value === true ? 'low' : null),
-});
-
-const statusVariant: Record<string, 'secondary' | 'outline' | 'destructive'> = {
-    ACTIVE: 'secondary',
-    INACTIVE: 'outline',
-    DISCONTINUED: 'outline',
+const stockStatusVariant: Record<
+    string,
+    'secondary' | 'outline' | 'destructive'
+> = {
+    IN_STOCK: 'secondary',
+    LOW_STOCK: 'outline',
+    OUT_OF_STOCK: 'destructive',
 };
 
 type ItemForm = {
@@ -121,10 +130,14 @@ type ItemForm = {
     part_number: string;
     description: string;
     specification: string;
-    quantity_on_hand: number | string;
     minimum_stock: number | string;
+    reorder_level: number | string;
     unit_cost: number | string | null;
     status: string;
+    opening_quantity: number | string | null;
+    opening_location_id: number | null;
+    opening_unit_cost: number | string | null;
+    cost_change_reason: string;
 };
 
 function blankForm(): ItemForm {
@@ -140,10 +153,14 @@ function blankForm(): ItemForm {
         part_number: '',
         description: '',
         specification: '',
-        quantity_on_hand: 0,
         minimum_stock: 0,
+        reorder_level: 0,
         unit_cost: null,
         status: 'ACTIVE',
+        opening_quantity: null,
+        opening_location_id: props.defaultLocationId,
+        opening_unit_cost: null,
+        cost_change_reason: '',
     };
 }
 
@@ -173,6 +190,20 @@ const categoryFilterOptions = computed(() =>
     props.categories.map((c) => ({ value: c.value, label: c.label })),
 );
 
+/** Whether the edited item's unit cost differs from what it was when the dialog opened. */
+const costChanged = computed(() => {
+    if (!editing.value) {
+        return false;
+    }
+
+    const toCost = (value: number | string | null) =>
+        value === null || value === ''
+            ? null
+            : Number(Number(value).toFixed(2));
+
+    return toCost(form.unit_cost) !== toCost(editing.value.unit_cost);
+});
+
 const deleting = ref<Item | null>(null);
 const deleteOpen = ref(false);
 const deleteProcessing = ref(false);
@@ -199,10 +230,14 @@ function openEdit(item: Item): void {
         part_number: item.part_number ?? '',
         description: item.description ?? '',
         specification: item.specification ?? '',
-        quantity_on_hand: item.quantity_on_hand,
         minimum_stock: item.minimum_stock,
+        reorder_level: item.reorder_level,
         unit_cost: item.unit_cost,
         status: item.status,
+        opening_quantity: null,
+        opening_location_id: null,
+        opening_unit_cost: null,
+        cost_change_reason: '',
     });
     form.reset();
     form.clearErrors();
@@ -241,10 +276,6 @@ function destroy(): void {
         },
     });
 }
-
-function brandModel(item: Item): string {
-    return [item.brand, item.model].filter(Boolean).join(' · ') || '—';
-}
 </script>
 
 <template>
@@ -263,9 +294,11 @@ function brandModel(item: Item): string {
 
         <div class="grid gap-4 sm:grid-cols-3">
             <StatCard
-                label="Total items"
-                :value="formatNumber(stats.total, 0)"
-                :icon="Boxes"
+                label="Stock value"
+                :value="formatNumber(stats.stock_value)"
+                unit="PHP"
+                :icon="Wallet"
+                tone="brass"
             />
             <StatCard
                 label="Low stock"
@@ -274,11 +307,10 @@ function brandModel(item: Item): string {
                 :tone="stats.low_stock > 0 ? 'danger' : 'patina'"
             />
             <StatCard
-                label="Stock value"
-                :value="formatNumber(stats.stock_value)"
-                unit="PHP"
-                :icon="Wallet"
-                tone="brass"
+                label="Out of stock"
+                :value="formatNumber(stats.out_of_stock, 0)"
+                :icon="CircleOff"
+                :tone="stats.out_of_stock > 0 ? 'danger' : 'patina'"
             />
         </div>
 
@@ -310,16 +342,26 @@ function brandModel(item: Item): string {
                     aria-label="Filter by type"
                 />
                 <SelectInput
-                    v-model="filters.status"
+                    v-model="filters.item_status"
                     class="w-36"
                     :options="statuses"
                     placeholder="All statuses"
-                    aria-label="Filter by status"
+                    aria-label="Filter by item status"
                 />
-                <Label class="flex items-center gap-2 font-normal">
-                    <Checkbox v-model="lowStockOnly" />
-                    Low stock only
-                </Label>
+                <SelectInput
+                    v-model="filters.location"
+                    class="w-44"
+                    :options="filterLocations"
+                    placeholder="All locations"
+                    aria-label="Filter by location"
+                />
+                <SelectInput
+                    v-model="filters.stock"
+                    class="w-40"
+                    :options="stockStatuses"
+                    placeholder="Any stock"
+                    aria-label="Filter by stock status"
+                />
             </div>
 
             <div v-if="props.items.data.length" class="overflow-x-auto">
@@ -330,13 +372,18 @@ function brandModel(item: Item): string {
                             <th class="px-5 py-2.5 font-medium">Name</th>
                             <th class="px-5 py-2.5 font-medium">Category</th>
                             <th class="px-5 py-2.5 font-medium">Type</th>
+                            <th class="px-5 py-2.5 text-right font-medium">
+                                Available
+                            </th>
                             <th class="px-5 py-2.5 font-medium">
-                                Brand / model
+                                Stock status
                             </th>
                             <th class="px-5 py-2.5 text-right font-medium">
-                                On hand
+                                Unit cost
                             </th>
-                            <th class="px-5 py-2.5 font-medium">Status</th>
+                            <th class="px-5 py-2.5 text-right font-medium">
+                                Value
+                            </th>
                             <th v-if="can.manage" class="px-5 py-2.5">
                                 <span class="sr-only">Actions</span>
                             </th>
@@ -352,12 +399,19 @@ function brandModel(item: Item): string {
                                 {{ item.item_code }}
                             </td>
                             <td class="px-5 py-3 font-medium">
-                                <Link
-                                    :href="items.show(item.id)"
-                                    class="hover:text-primary hover:underline"
-                                >
-                                    {{ item.name }}
-                                </Link>
+                                <div class="flex items-center gap-2">
+                                    <Link
+                                        :href="items.show(item.id)"
+                                        class="hover:text-primary hover:underline"
+                                    >
+                                        {{ item.name }}
+                                    </Link>
+                                    <Badge
+                                        v-if="item.status !== 'ACTIVE'"
+                                        variant="outline"
+                                        >{{ item.status_label }}</Badge
+                                    >
+                                </div>
                             </td>
                             <td class="px-5 py-3 text-muted-foreground">
                                 {{ item.category_name }}
@@ -365,44 +419,42 @@ function brandModel(item: Item): string {
                             <td class="px-5 py-3 text-muted-foreground">
                                 {{ item.item_type_label }}
                             </td>
-                            <td class="px-5 py-3 text-muted-foreground">
-                                {{ brandModel(item) }}
-                            </td>
                             <td class="px-5 py-3 text-right tabular-nums">
-                                <div
-                                    class="flex items-center justify-end gap-2"
+                                <span
+                                    :class="
+                                        item.stock_status === 'IN_STOCK'
+                                            ? 'font-medium'
+                                            : 'font-semibold text-destructive'
+                                    "
+                                    >{{ formatNumber(item.available) }}</span
                                 >
-                                    <Badge
-                                        v-if="item.is_low_stock"
-                                        variant="destructive"
-                                        :title="`Minimum stock: ${formatNumber(item.minimum_stock)} ${item.unit_symbol}`"
-                                    >
-                                        <CircleAlert /> Low
-                                    </Badge>
-                                    <span
-                                        :class="
-                                            item.is_low_stock
-                                                ? 'font-semibold text-destructive'
-                                                : ''
-                                        "
-                                    >
-                                        {{
-                                            formatNumber(item.quantity_on_hand)
-                                        }}
-                                    </span>
-                                    <span
-                                        class="font-mono text-xs text-muted-foreground"
-                                        >{{ item.unit_symbol }}</span
-                                    >
-                                </div>
+                                <span
+                                    class="font-mono text-xs text-muted-foreground"
+                                >
+                                    {{ item.unit_symbol }}</span
+                                >
                             </td>
                             <td class="px-5 py-3">
                                 <Badge
                                     :variant="
-                                        statusVariant[item.status] ?? 'outline'
+                                        stockStatusVariant[item.stock_status] ??
+                                        'outline'
                                     "
-                                    >{{ item.status_label }}</Badge
+                                    :title="`Minimum stock: ${formatNumber(item.minimum_stock)} ${item.unit_symbol}`"
                                 >
+                                    <CircleAlert
+                                        v-if="item.stock_status !== 'IN_STOCK'"
+                                    />
+                                    {{ item.stock_status_label }}
+                                </Badge>
+                            </td>
+                            <td
+                                class="px-5 py-3 text-right text-muted-foreground tabular-nums"
+                            >
+                                {{ formatNumber(item.unit_cost) }}
+                            </td>
+                            <td class="px-5 py-3 text-right tabular-nums">
+                                {{ formatNumber(item.stock_value) }}
                             </td>
                             <td v-if="can.manage" class="px-5 py-3">
                                 <div class="flex justify-end gap-1">
@@ -571,18 +623,36 @@ function brandModel(item: Item): string {
 
                 <FormSection title="Stock">
                     <Field
+                        v-if="editing"
+                        class="sm:col-span-2"
                         label="Quantity on hand"
                         for="item-quantity"
-                        :error="form.errors.quantity_on_hand"
-                        required
                     >
                         <Input
                             id="item-quantity"
-                            v-model="form.quantity_on_hand"
-                            type="number"
-                            min="0"
-                            step="any"
+                            :model-value="`${formatNumber(editing.quantity_on_hand)} ${editing.unit_symbol}`"
+                            readonly
+                            disabled
                         />
+                        <p class="text-xs text-muted-foreground">
+                            Stock changes only through stock transactions.
+                            <Link
+                                v-if="editing.ledger_url"
+                                :href="editing.ledger_url"
+                                class="text-primary hover:underline"
+                                >View ledger</Link
+                            >
+                            <template v-if="editing.ledger_url"> · </template>
+                            <Link
+                                :href="
+                                    items.show(editing.id, {
+                                        query: { tab: 'stock' },
+                                    })
+                                "
+                                class="text-primary hover:underline"
+                                >Stock by location</Link
+                            >
+                        </p>
                     </Field>
                     <Field
                         label="Minimum stock"
@@ -594,6 +664,21 @@ function brandModel(item: Item): string {
                         <Input
                             id="item-minimum"
                             v-model="form.minimum_stock"
+                            type="number"
+                            min="0"
+                            step="any"
+                        />
+                    </Field>
+                    <Field
+                        label="Reorder level"
+                        for="item-reorder"
+                        :error="form.errors.reorder_level"
+                        hint="Reorder when stock reaches this amount. 0 disables."
+                        required
+                    >
+                        <Input
+                            id="item-reorder"
+                            v-model="form.reorder_level"
                             type="number"
                             min="0"
                             step="any"
@@ -622,6 +707,73 @@ function brandModel(item: Item): string {
                             id="item-status"
                             v-model="form.status"
                             :options="statuses"
+                        />
+                    </Field>
+                    <Field
+                        v-if="costChanged"
+                        class="sm:col-span-2"
+                        label="Reason for cost change"
+                        for="item-cost-reason"
+                        :error="form.errors.cost_change_reason"
+                        hint="Saved in the item's price history."
+                    >
+                        <Input
+                            id="item-cost-reason"
+                            v-model="form.cost_change_reason"
+                            placeholder="e.g. Supplier price increase"
+                        />
+                    </Field>
+                </FormSection>
+
+                <FormSection
+                    v-if="!editing"
+                    title="Opening stock"
+                    description="Optional. Posts an opening balance to the stock ledger."
+                    :columns="3"
+                >
+                    <Field
+                        label="Quantity"
+                        for="item-opening-quantity"
+                        :error="form.errors.opening_quantity"
+                    >
+                        <Input
+                            id="item-opening-quantity"
+                            v-model="form.opening_quantity"
+                            type="number"
+                            min="0"
+                            step="any"
+                            placeholder="0"
+                        />
+                    </Field>
+                    <Field
+                        label="Location"
+                        for="item-opening-location"
+                        :error="form.errors.opening_location_id"
+                    >
+                        <SelectInput
+                            id="item-opening-location"
+                            v-model="form.opening_location_id"
+                            :options="locations"
+                            placeholder="Select a location"
+                        />
+                    </Field>
+                    <Field
+                        label="Unit cost"
+                        for="item-opening-cost"
+                        :error="form.errors.opening_unit_cost"
+                        hint="Defaults to the item's unit cost."
+                    >
+                        <Input
+                            id="item-opening-cost"
+                            v-model="form.opening_unit_cost"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            :placeholder="
+                                form.unit_cost === null || form.unit_cost === ''
+                                    ? '0.00'
+                                    : String(form.unit_cost)
+                            "
                         />
                     </Field>
                 </FormSection>

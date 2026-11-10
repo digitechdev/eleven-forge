@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Innovations\InnovationController;
+use App\Http\Controllers\Innovations\InnovationFormulaController;
 use App\Http\Controllers\Innovations\InnovationItemController;
 use App\Http\Controllers\Innovations\InnovationMediaController;
 use App\Http\Controllers\Innovations\InnovationTechnologyController;
@@ -20,6 +21,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->withTrashed()->name('innovations.restore');
 
     Route::prefix('innovations/{innovation}')->name('innovations.')->scopeBindings()->group(function () {
+        Route::post('formulas', [InnovationFormulaController::class, 'store'])->name('formulas.store');
+        Route::put('formulas/{formula}', [InnovationFormulaController::class, 'update'])->name('formulas.update');
+        Route::patch('formulas/{formula}/activate', [InnovationFormulaController::class, 'activate'])->name('formulas.activate');
+
         Route::post('items', [InnovationItemController::class, 'store'])->name('items.store');
         Route::put('items/{innovationItem}', [InnovationItemController::class, 'update'])->name('items.update');
         Route::delete('items/{innovationItem}', [InnovationItemController::class, 'destroy'])->name('items.destroy');
