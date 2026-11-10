@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Administration;
 
+use App\Enums\AccessPermission;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Administration\StorePermissionRequest;
@@ -28,6 +29,7 @@ class PermissionController extends Controller
                 ->map(fn (Permission $permission): array => [
                     'id' => $permission->id,
                     'name' => $permission->name,
+                    'description' => AccessPermission::tryFrom($permission->name)?->description(),
                     'roles' => $permission->roles
                         ->sortBy('name')
                         ->map(fn (Role $role): string => UserRole::tryFrom($role->name)?->label() ?? Str::headline($role->name))

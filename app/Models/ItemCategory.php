@@ -37,4 +37,31 @@ class ItemCategory extends Model
     {
         return $this->hasMany(InventoryItem::class, 'category_id');
     }
+
+    /**
+     * Get the IDs of every category nested below this one, at any depth.
+     *
+     * @return list<int>
+     */
+    public function descendantIds(): array
+    {
+        $descendantIds = [];
+        $parentIds = [$this->id];
+
+        while ($parentIds !== []) {
+            $parentIds = self::query()->whereIn('parent_id', $parentIds)->pluck('id')->all();
+            $parentIds = array_values(array_diff($parentIds, $descendantIds));
+            $descendantIds = [...$descendantIds, ...$parentIds];
+        }
+
+        return $descendantIds;
+    }
+
+    /**
+     * Determine whether the category still has items (including archived ones) or child categories.
+     */
+    public function isInUse(): bool
+    {
+        return $this->children()->exists() || $this->inventoryItems()->withTrashed()->exists();
+    }
 }

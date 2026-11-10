@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\TechnologyCategory;
 use App\Enums\TechnologyStatus;
 use App\Models\Technology;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,7 +21,7 @@ class TechnologyFactory extends Factory
     {
         return [
             'name' => fake()->unique()->word(),
-            'category' => 'Framework',
+            'category' => TechnologyCategory::Framework,
             'description' => fake()->sentence(),
             'status' => TechnologyStatus::Active,
         ];

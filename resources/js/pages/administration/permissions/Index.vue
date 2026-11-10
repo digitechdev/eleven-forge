@@ -3,40 +3,30 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import { IdCard, Plus } from '@lucide/vue';
 import Field from '@/components/common/Field.vue';
 import PageHeader from '@/components/common/PageHeader.vue';
-import PageRoadmap from '@/components/common/PageRoadmap.vue';
-import type { RoadmapArea } from '@/components/common/PageRoadmap.vue';
 import Panel from '@/components/common/Panel.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import administration from '@/routes/administration';
+import { index as permissionsIndexCrumb } from '@/routes/administration/permissions';
+import { index as usersIndexCrumb } from '@/routes/administration/users';
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs';
 
-type Permission = { id: number; name: string; roles: string[] };
+useBreadcrumbs([
+    { title: 'Administration', href: usersIndexCrumb() },
+    { title: 'Permissions', href: permissionsIndexCrumb() },
+]);
+
+type Permission = {
+    id: number;
+    name: string;
+    description: string | null;
+    roles: string[];
+};
 
 defineProps<{ permissions: Permission[] }>();
 
 const form = useForm({ name: '' });
-
-const tasks = [
-    'Connect new permission names to specific app actions and policies before granting them.',
-    'Show where each permission is used in the application.',
-    'Record changes to permission grants for review.',
-];
-
-const related: RoadmapArea[] = [
-    {
-        label: 'Roles',
-        description:
-            'Roles collect permissions; changing a role affects its assigned users.',
-        href: administration.roles.index(),
-    },
-    {
-        label: 'Users',
-        description:
-            'Users gain these abilities through their role assignments.',
-        href: administration.users.index(),
-    },
-];
 
 function createPermission(): void {
     form.post(administration.permissions.store().url, {
@@ -89,12 +79,20 @@ function createPermission(): void {
             </form>
         </Panel>
 
-        <PageRoadmap :tasks="tasks" :related="related" />
-
         <div class="space-y-3">
             <Panel v-for="permission in permissions" :key="permission.id">
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <h2 class="text-lg font-bold">{{ permission.name }}</h2>
+                    <div class="min-w-0 space-y-1">
+                        <h2 class="font-mono text-base font-bold">
+                            {{ permission.name }}
+                        </h2>
+                        <p class="text-sm text-muted-foreground">
+                            {{
+                                permission.description ??
+                                'Custom permission. Connect it to a policy before granting it.'
+                            }}
+                        </p>
+                    </div>
                     <div class="flex flex-wrap gap-2">
                         <Badge
                             v-for="role in permission.roles"

@@ -7,13 +7,41 @@ use App\Enums\InnovationType;
 use App\Enums\InnovationVisibility;
 use Database\Factories\InnovationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
+/**
+ * @property int $id
+ * @property string $innovation_code
+ * @property int $category_id
+ * @property string $name
+ * @property string $slug
+ * @property InnovationType $type
+ * @property string|null $tagline
+ * @property string|null $short_description
+ * @property string|null $description
+ * @property string|null $problem_statement
+ * @property string|null $solution_description
+ * @property list<string>|null $key_features
+ * @property list<string>|null $benefits
+ * @property InnovationStatus $status
+ * @property InnovationVisibility $visibility
+ * @property Carbon|null $developed_at
+ * @property bool $is_featured
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
+ */
 #[Fillable(['innovation_code', 'category_id', 'name', 'slug', 'type', 'tagline', 'short_description', 'description', 'problem_statement', 'solution_description', 'key_features', 'benefits', 'status', 'visibility', 'developed_at', 'is_featured', 'created_by', 'updated_by'])]
 class Innovation extends Model
 {
@@ -71,5 +99,71 @@ class Innovation extends Model
     public function technologies(): BelongsToMany
     {
         return $this->belongsToMany(Technology::class, 'innovation_technologies')->withPivot(['id', 'version', 'purpose'])->withTimestamps();
+    }
+
+    /**
+     * Innovations visible on the public showcase.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function published(Builder $query): void
+    {
+        $query->where('visibility', InnovationVisibility::Public);
+    }
+
+    /**
+     * Innovations matching a term in name, code, or tagline.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function search(Builder $query, string $term): void
+    {
+        $query->where(fn (Builder $query) => $query
+            ->whereLike('name', "%{$term}%")
+            ->orWhereLike('innovation_code', "%{$term}%")
+            ->orWhereLike('tagline', "%{$term}%"));
+    }
+
+    /**
+     * The next sequential innovation code for the given year, e.g. INV-2026-0001.
+     * Soft-deleted innovations are included so codes are never reused.
+     */
+    public static function nextCode(?int $year = null): string
+    {
+        $prefix = sprintf('INV-%d-', $year ?? now()->year);
+
+        $highest = static::withTrashed()
+            ->whereLike('innovation_code', $prefix.'%')
+            ->pluck('innovation_code')
+            ->map(fn (string $code): int => (int) Str::after($code, $prefix))
+            ->max() ?? 0;
+
+        do {
+            $code = $prefix.str_pad((string) ++$highest, 4, '0', STR_PAD_LEFT);
+        } while (static::withTrashed()->where('innovation_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * A slug derived from the given name that no innovation (including soft-deleted ones) uses yet.
+     */
+    public static function uniqueSlug(string $name, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($name) ?: 'innovation';
+        $slug = $base;
+        $suffix = 2;
+
+        while (static::withTrashed()
+            ->where('slug', $slug)
+            ->when($ignoreId, fn (Builder $query, int $id) => $query->whereKeyNot($id))
+            ->exists()) {
+            $slug = "{$base}-{$suffix}";
+            $suffix++;
+        }
+
+        return $slug;
     }
 }

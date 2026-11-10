@@ -24,4 +24,12 @@ class InnovationCategory extends Model
     {
         return $this->hasMany(Innovation::class, 'category_id');
     }
+
+    /**
+     * Determine whether any innovation (including archived ones) belongs to the category.
+     */
+    public function isInUse(): bool
+    {
+        return $this->innovations()->withTrashed()->exists();
+    }
 }

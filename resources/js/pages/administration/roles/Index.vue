@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { IdCard, KeyRound, Pencil, Plus } from '@lucide/vue';
+import { IdCard, KeyRound, Pencil, Plus, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import Field from '@/components/common/Field.vue';
 import PageHeader from '@/components/common/PageHeader.vue';
-import PageRoadmap from '@/components/common/PageRoadmap.vue';
-import type { RoadmapArea } from '@/components/common/PageRoadmap.vue';
 import Panel from '@/components/common/Panel.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +12,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import administration from '@/routes/administration';
+import { index as rolesIndexCrumb } from '@/routes/administration/roles';
+import { index as usersIndexCrumb } from '@/routes/administration/users';
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs';
+
+useBreadcrumbs([
+    { title: 'Administration', href: usersIndexCrumb() },
+    { title: 'Roles', href: rolesIndexCrumb() },
+]);
 
 type Role = {
     id: number;
@@ -50,26 +56,6 @@ const permissionsError = computed(() => {
         )?.[1]
     );
 });
-
-const tasks = [
-    'Connect role assignment to the Users management page.',
-    'Show an effective-access summary before changing role grants.',
-    'Record who changed a role or its permissions.',
-];
-
-const related: RoadmapArea[] = [
-    {
-        label: 'Users',
-        description: 'Users receive access through their assigned roles.',
-        href: administration.users.index(),
-    },
-    {
-        label: 'Permissions',
-        description:
-            'A role groups the named permissions available to its users.',
-        href: administration.permissions.index(),
-    },
-];
 
 function createRole(): void {
     createForm.post(administration.roles.store().url, {
@@ -154,8 +140,6 @@ function cancelEditing(): void {
             </form>
         </Panel>
 
-        <PageRoadmap :tasks="tasks" :related="related" />
-
         <Panel
             v-if="editingRole"
             :title="`Edit ${editingRole.label} permissions`"
@@ -207,10 +191,18 @@ function cancelEditing(): void {
                                 >Protected</Badge
                             >
                         </div>
-                        <p class="text-sm text-muted-foreground">
+                        <Link
+                            :href="
+                                administration.users.index({
+                                    query: { role: role.name },
+                                })
+                            "
+                            class="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                        >
+                            <Users class="size-3.5" />
                             {{ role.usersCount }}
                             {{ role.usersCount === 1 ? 'user' : 'users' }}
-                        </p>
+                        </Link>
                         <div class="flex flex-wrap gap-2">
                             <Badge
                                 v-for="name in role.permissionNames"

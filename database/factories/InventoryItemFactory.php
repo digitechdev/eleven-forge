@@ -32,4 +32,15 @@ class InventoryItemFactory extends Factory
             'status' => InventoryItemStatus::Active,
         ];
     }
+
+    /**
+     * Indicate that the item is at or below its minimum stock.
+     */
+    public function lowStock(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'quantity_on_hand' => 2,
+            'minimum_stock' => 5,
+        ]);
+    }
 }
