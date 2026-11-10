@@ -10,7 +10,7 @@ defineProps<{ icon?: Component; title: string; description?: string }>();
     >
         <div v-if="icon" class="relative mb-2">
             <div
-                class="relative flex size-12 items-center justify-center rounded-sm border border-dashed border-primary/40 text-primary"
+                class="relative flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary ring-1 ring-primary/15 motion-safe:animate-[pulse-ring_2.4s_ease-out_infinite]"
             >
                 <component :is="icon" class="size-6" />
             </div>

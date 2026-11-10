@@ -58,7 +58,7 @@ defineProps<{ variant: SkeletonPageVariant }>();
                 <div
                     v-for="i in 3"
                     :key="i"
-                    class="overflow-hidden rounded-sm border bg-card shadow-xs"
+                    class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-soft"
                 >
                     <Bone class="h-24 rounded-none" />
                     <div class="space-y-3 p-5">
@@ -104,7 +104,7 @@ defineProps<{ variant: SkeletonPageVariant }>();
                 <div
                     v-for="section in 2"
                     :key="section"
-                    class="grid gap-5 rounded-sm border bg-card p-6 shadow-xs md:grid-cols-2"
+                    class="grid gap-5 rounded-xl border border-border/70 bg-card p-6 shadow-soft shadow-xs md:grid-cols-2"
                 >
                     <div
                         v-for="i in section === 1 ? 6 : 3"

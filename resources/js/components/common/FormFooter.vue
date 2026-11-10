@@ -8,7 +8,7 @@ defineEmits<{ cancel: [] }>();
 
 <template>
     <div
-        class="sticky bottom-0 -mx-6 mt-6 flex flex-wrap items-center justify-end gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur"
+        class="sticky bottom-0 -mx-6 mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-background/80 px-6 py-3 backdrop-blur-md"
     >
         <Button type="button" variant="ghost" @click="$emit('cancel')"
             >Cancel</Button

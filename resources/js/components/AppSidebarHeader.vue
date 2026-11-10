@@ -29,12 +29,14 @@ const trailKey = computed(() =>
 <template>
     <header
         :class="[
-            'sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 transition-shadow duration-200',
-            scrolled ? 'shadow-[0_1px_0_0_var(--border)]' : '',
+            'sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl backdrop-saturate-150 transition-[background-color,box-shadow,border-color] duration-300',
+            scrolled
+                ? 'border-border/70 bg-background/75 shadow-soft'
+                : 'border-transparent bg-background/40',
         ]"
     >
         <div class="flex min-w-0 items-center gap-2">
-            <SidebarTrigger class="-ml-1 rounded-sm" />
+            <SidebarTrigger class="-ml-1 rounded-lg" />
             <template v-if="breadcrumbs.length > 0">
                 <span
                     class="mx-1 h-4 w-px shrink-0 bg-border"

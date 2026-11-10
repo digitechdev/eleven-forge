@@ -18,7 +18,7 @@ const model = defineModel<string | number | null | undefined>();
         v-model="model"
         :class="
             cn(
-                'h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none dark:bg-input/30',
+                'h-9 w-full min-w-0 cursor-pointer rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-xs transition-[box-shadow,border-color] duration-200 outline-none hover:border-foreground/20 dark:bg-input/30',
                 'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
                 'aria-invalid:border-destructive',
                 props.class,

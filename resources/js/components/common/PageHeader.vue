@@ -9,21 +9,21 @@ defineProps<{
 
 <template>
     <div
-        class="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between"
+        class="flex flex-col gap-4 pb-2 sm:flex-row sm:items-end sm:justify-between"
     >
         <div class="min-w-0 space-y-2">
             <p
                 v-if="eyebrow"
-                class="flex items-center gap-2 label-mono text-primary"
+                class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/8 px-2.5 py-0.5 text-xs font-medium text-primary"
             >
                 <span
-                    class="size-1.5 rotate-45 bg-primary"
+                    class="size-1.5 rounded-full bg-primary motion-safe:animate-pulse"
                     aria-hidden="true"
                 />
                 {{ eyebrow }}
             </p>
             <h1
-                class="text-3xl font-bold text-foreground sm:text-[2rem] sm:leading-tight"
+                class="text-3xl font-bold tracking-tight text-foreground sm:text-[2.125rem] sm:leading-tight"
             >
                 {{ title }}
             </h1>

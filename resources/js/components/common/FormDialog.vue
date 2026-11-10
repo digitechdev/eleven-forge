@@ -36,12 +36,12 @@ const widths = { md: 'sm:max-w-lg', lg: 'sm:max-w-2xl', xl: 'sm:max-w-3xl' };
             ]"
         >
             <DialogHeader
-                class="shrink-0 border-b bg-muted/30 px-6 py-4 text-left"
+                class="shrink-0 border-b border-border/60 bg-gradient-to-b from-primary/5 to-transparent px-6 py-4 text-left"
             >
                 <DialogTitle class="flex items-center gap-2.5 text-lg">
                     <span
                         v-if="icon"
-                        class="flex size-8 items-center justify-center rounded-sm bg-primary/10 text-primary"
+                        class="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15"
                     >
                         <component :is="icon" class="size-4" />
                     </span>

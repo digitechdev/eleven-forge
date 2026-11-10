@@ -9,7 +9,7 @@ withDefaults(defineProps<{ count?: number }>(), { count: 4 });
         <div
             v-for="i in count"
             :key="i"
-            class="rounded-sm border bg-card p-5 shadow-xs"
+            class="rounded-xl border border-border/70 bg-card p-5 shadow-soft shadow-xs"
         >
             <div class="mb-4 flex items-start justify-between">
                 <Bone class="h-3 w-24" />

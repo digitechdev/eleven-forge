@@ -30,7 +30,7 @@ function toggle(): void {
                 <button
                     type="button"
                     :aria-label="label"
-                    class="relative inline-flex size-9 items-center justify-center overflow-hidden rounded-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    class="relative inline-flex size-9 items-center justify-center overflow-hidden rounded-lg text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     @click="toggle"
                 >
                     <Sun

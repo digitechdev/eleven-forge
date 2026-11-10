@@ -16,6 +16,7 @@
     --font-mono:
         'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
+    --radius-xl: calc(var(--radius) + 4px);
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
@@ -53,6 +54,13 @@
     --color-chart-3: var(--chart-3);
     --color-chart-4: var(--chart-4);
     --color-chart-5: var(--chart-5);
+
+    --shadow-soft: var(--elevation-1);
+    --shadow-lift: var(--elevation-2);
+    --shadow-glow: var(--elevation-glow);
+
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
     --color-sidebar: var(--sidebar-background);
     --color-sidebar-foreground: var(--sidebar-foreground);
@@ -121,7 +129,7 @@
     --chart-3: oklch(0.76 0.14 85);
     --chart-4: oklch(0.45 0.02 60);
     --chart-5: oklch(0.6 0.12 180);
-    --radius: 0.3rem;
+    --radius: 0.85rem;
     --sidebar-background: oklch(0.2 0.01 60);
     --sidebar-foreground: oklch(0.88 0.008 70);
     --sidebar-primary: oklch(0.72 0.17 48);
@@ -131,6 +139,12 @@
     --sidebar-border: oklch(0.3 0.012 60);
     --sidebar-ring: oklch(0.72 0.17 48);
     --sidebar: oklch(0.2 0.01 60);
+    --elevation-1:
+        0 1px 2px oklch(0.3 0.02 60 / 0.04), 0 2px 8px oklch(0.3 0.02 60 / 0.04);
+    --elevation-2:
+        0 2px 4px oklch(0.3 0.02 60 / 0.04),
+        0 12px 28px -6px oklch(0.3 0.02 60 / 0.12);
+    --elevation-glow: 0 8px 24px -8px oklch(0.62 0.19 42 / 0.45);
 }
 
 .dark {
@@ -167,14 +181,31 @@
     --sidebar-border: oklch(0.25 0.01 60);
     --sidebar-ring: oklch(0.72 0.17 48);
     --sidebar: oklch(0.13 0.008 60);
+    --elevation-1: 0 1px 2px oklch(0 0 0 / 0.25), 0 2px 8px oklch(0 0 0 / 0.15);
+    --elevation-2:
+        0 2px 4px oklch(0 0 0 / 0.3), 0 16px 32px -8px oklch(0 0 0 / 0.5);
+    --elevation-glow: 0 8px 28px -8px oklch(0.72 0.17 48 / 0.4);
 }
 
 @layer base {
     * {
         @apply border-border outline-ring/50;
     }
+    html {
+        scroll-behavior: smooth;
+    }
     body {
-        @apply bg-background text-foreground;
+        @apply bg-background text-foreground antialiased;
+        font-feature-settings: 'cv11', 'ss01';
+    }
+    ::selection {
+        background: color-mix(in oklab, var(--primary) 25%, transparent);
+    }
+    /* Slim, quiet scrollbars that only show their thumb. */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: color-mix(in oklab, var(--foreground) 18%, transparent)
+            transparent;
     }
     h1,
     h2,
@@ -185,12 +216,16 @@
 
 /* ── Forge motifs ──────────────────────────────────────────────── */
 
-/* Small uppercase monospace label used for eyebrows, codes and section titles. */
+/*
+  Small label for eyebrows, field names and table headings. Kept as one utility so the
+  whole app's labelling can be tuned in one place.
+*/
 @utility label-mono {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    text-transform: none;
 }
 
 /* Blueprint grid drawn in the current text colour; set the colour with text-* utilities. */
@@ -214,7 +249,7 @@
 @keyframes forge-in {
     from {
         opacity: 0;
-        transform: translateY(4px);
+        transform: translateY(10px);
     }
     to {
         opacity: 1;
@@ -231,20 +266,104 @@
     }
 }
 
-/* Each page settles in quickly when it is visited. */
+@keyframes float-glow {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        opacity: 0.55;
+    }
+    50% {
+        transform: translate3d(2%, 3%, 0) scale(1.06);
+        opacity: 0.8;
+    }
+}
+
+@keyframes pulse-ring {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 35%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 10px transparent;
+    }
+}
+
+/*
+  Each page settles in when visited; its top-level blocks follow one after another
+  so the eye lands on the header first.
+*/
 .page-enter {
-    animation: forge-in 220ms ease-out both;
+    animation: forge-in 420ms var(--ease-out-expo) both;
+}
+
+.page-enter > * > * {
+    animation: forge-in 520ms var(--ease-out-expo) both;
+}
+
+.page-enter > * > :nth-child(2) {
+    animation-delay: 50ms;
+}
+.page-enter > * > :nth-child(3) {
+    animation-delay: 100ms;
+}
+.page-enter > * > :nth-child(4) {
+    animation-delay: 150ms;
+}
+.page-enter > * > :nth-child(n + 5) {
+    animation-delay: 200ms;
+}
+
+/* Cards that rise slightly toward the pointer. */
+@utility hover-lift {
+    transition:
+        transform 300ms var(--ease-out-expo),
+        box-shadow 300ms var(--ease-out-expo),
+        border-color 300ms ease;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--elevation-2);
+        border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+    }
+}
+
+/* A soft ember wash behind the top of the page. */
+@utility bg-ambient {
+    background-image:
+        radial-gradient(
+            60rem 22rem at 85% -6rem,
+            color-mix(in oklab, var(--primary) 9%, transparent),
+            transparent 70%
+        ),
+        radial-gradient(
+            40rem 18rem at -10% -4rem,
+            color-mix(in oklab, var(--chart-2) 6%, transparent),
+            transparent 70%
+        );
+    background-repeat: no-repeat;
+}
+
+/* Tables inside panels: quiet headers, airy rows and a smooth hover. */
+[data-slot='panel'] table tbody tr {
+    transition: background-color 180ms ease;
+}
+
+[data-slot='panel'] table tbody tr:hover {
+    background-color: color-mix(in oklab, var(--accent) 55%, transparent);
 }
 
 /* Scroll-reveal (see the v-reveal directive): hidden until it scrolls into view. */
 [data-reveal] {
     opacity: 0;
-    transition: opacity 300ms ease-out;
+    transform: translateY(12px);
+    transition:
+        opacity 500ms var(--ease-out-expo),
+        transform 500ms var(--ease-out-expo);
     transition-delay: var(--reveal-delay, 0ms);
 }
 
 [data-reveal='visible'] {
     opacity: 1;
+    transform: none;
 }
 
 /* A light sweep across progress bars. */
@@ -272,13 +391,23 @@
 
 @media (prefers-reduced-motion: reduce) {
     .page-enter,
+    .page-enter > * > *,
     .shimmer::after {
         animation: none;
     }
 
+    .hover-lift:hover {
+        transform: none;
+    }
+
     [data-reveal] {
         opacity: 1;
+        transform: none;
         transition: none;
+    }
+
+    html {
+        scroll-behavior: auto;
     }
 }
 

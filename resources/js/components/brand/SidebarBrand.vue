@@ -18,7 +18,7 @@ const collapsed = computed(
         ]"
     >
         <span
-            class="flex size-8 shrink-0 items-center justify-center rounded-sm bg-sidebar-primary text-sidebar-primary-foreground"
+            class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sidebar-primary to-[oklch(0.62_0.19_35)] text-sidebar-primary-foreground shadow-[0_4px_14px_-4px_var(--sidebar-primary)]"
         >
             <AppLogoIcon class="size-5 fill-current" />
         </span>

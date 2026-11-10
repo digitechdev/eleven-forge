@@ -23,7 +23,7 @@ const bars = [35, 55, 40, 70, 50, 85, 60, 45, 75, 90, 65, 80];
 
 <template>
     <section
-        class="overflow-hidden rounded-sm border bg-card shadow-xs"
+        class="overflow-hidden rounded-xl border border-border/70 bg-card shadow-soft"
         aria-busy="true"
         aria-label="Loading"
     >

@@ -19,17 +19,24 @@ const display = useCountUp(() => props.value);
 </script>
 
 <template>
-    <div class="relative flex flex-col rounded-sm border bg-card p-5">
+    <div
+        class="group relative flex hover-lift flex-col overflow-hidden rounded-xl border border-border/70 bg-card p-5 shadow-soft"
+    >
         <span
-            :class="['absolute inset-y-0 left-0 w-0.5', toneBar[tone]]"
+            :class="[
+                'pointer-events-none absolute -top-10 -right-10 size-32 rounded-full opacity-[0.12] blur-2xl transition-opacity duration-500 group-hover:opacity-25',
+                toneBar[tone],
+            ]"
             aria-hidden="true"
         />
         <div class="mb-3 flex items-start justify-between gap-3">
-            <span class="label-mono text-muted-foreground">{{ label }}</span>
+            <span class="text-sm font-medium text-muted-foreground">{{
+                label
+            }}</span>
             <span
                 v-if="icon"
                 :class="[
-                    'flex size-8 shrink-0 items-center justify-center rounded-sm',
+                    'flex size-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-300 ease-[var(--ease-spring)] group-hover:scale-110 group-hover:-rotate-6',
                     toneIcon[tone],
                 ]"
             >
